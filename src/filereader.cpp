@@ -45,12 +45,12 @@ QList<QTime> FileReader::getFileTimeRange(QFile *file)
         QString allData = file->readAll();
         file->close();
 
-        QStringList readFileSplitLines = allData.split(QRegExp("[\\n+\\r+]"), Qt::SplitBehaviorFlags::SkipEmptyParts);
+        QStringList readFileSplitLines = allData.split(QRegularExpression("[\\n+\\r+]"), Qt::SplitBehaviorFlags::SkipEmptyParts);
 
         for (auto i = 0; i < readFileSplitLines.count(); ++i)
         {
-            QStringList inputStringSplitArrayTopLine = readFileSplitLines[i].simplified().split(QRegExp("[\\s+,]"), Qt::SplitBehaviorFlags::SkipEmptyParts);                                     // rozdzielamy traktująac spacje jako separator
-            QStringList inputStringSplitArrayButtomLine = readFileSplitLines[readFileSplitLines.count() - 1 - i].simplified().split(QRegExp("[\\s+,]"), Qt::SplitBehaviorFlags::SkipEmptyParts); // rozdzielamy traktująac spacje jako separator
+            QStringList inputStringSplitArrayTopLine = readFileSplitLines[i].simplified().split(QRegularExpression("[\\s+,]"), Qt::SplitBehaviorFlags::SkipEmptyParts);                                     // rozdzielamy traktująac spacje jako separator
+            QStringList inputStringSplitArrayButtomLine = readFileSplitLines[readFileSplitLines.count() - 1 - i].simplified().split(QRegularExpression("[\\s+,]"), Qt::SplitBehaviorFlags::SkipEmptyParts); // rozdzielamy traktująac spacje jako separator
             QStringList searchTimeFormatList = {"hh:mm:ss:zzz", "hh:mm:ss.zzz", "hh:mm:ss.z", "hh:mm:ss"};                                                                                       // TODO !!!
 
             bool foundTime[2] = {false};

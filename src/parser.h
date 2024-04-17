@@ -3,9 +3,11 @@
 
 #include <QObject>
 #include <QTime>
+#include <QElapsedTimer>
 #include <QDebug>
 #include <QTimer>
 #include <QApplication>
+#include <QRegularExpression>
 
 class Parser : public QObject
 {
@@ -49,6 +51,7 @@ private:
     QStringList labelStorage;
     QStringList stringListNumericData, stringListLabels;
     QStringList textStorage;
+    QElapsedTimer *parserTimer;
     QTime *parserClock;
     QTime latestTimeStamp;
     QTime minimumTime, maximumTime;

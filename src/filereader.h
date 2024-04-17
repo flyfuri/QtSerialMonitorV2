@@ -7,6 +7,7 @@
 #include <QTimer>
 #include <QTime>
 #include <QDebug>
+#include <QRegularExpression>
 
 class FileReader : public QObject
 {
