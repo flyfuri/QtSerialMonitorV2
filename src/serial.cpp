@@ -110,9 +110,9 @@ QString Serial::getSerialInfo()
     case (QSerialPort::DataBits::Data8):
         outputString.append("Data8, ");
         break;
-    case (QSerialPort::DataBits::UnknownDataBits):
-        outputString.append("UnknownDataBits, ");
-        break;
+    //BF case (QSerialPort::DataBits::UnknownDataBits):
+    //     outputString.append("UnknownDataBits, ");
+    //     break;
     }
 
     switch (serialDevice->parity())
@@ -132,9 +132,9 @@ QString Serial::getSerialInfo()
     case (QSerialPort::Parity::SpaceParity):
         outputString.append("SpaceParity, ");
         break;
-    case (QSerialPort::Parity::UnknownParity):
-        outputString.append("UnknownParity, ");
-        break;
+    //BF case (QSerialPort::Parity::UnknownParity):
+    //     outputString.append("UnknownParity, ");
+    //     break;
     }
 
     switch (serialDevice->stopBits())
@@ -148,9 +148,9 @@ QString Serial::getSerialInfo()
     case (QSerialPort::StopBits::OneAndHalfStop):
         outputString.append("OneAndHalfStop, ");
         break;
-    case (QSerialPort::StopBits::UnknownStopBits):
-        outputString.append("UnknownStopBits, ");
-        break;
+    //BF case (QSerialPort::StopBits::UnknownStopBits):
+    //     outputString.append("UnknownStopBits, ");
+    //     break;
     }
 
     switch (serialDevice->flowControl())
@@ -164,9 +164,9 @@ QString Serial::getSerialInfo()
     case (QSerialPort::FlowControl::SoftwareControl):
         outputString.append("SoftwareControl, ");
         break;
-    case (QSerialPort::FlowControl::UnknownFlowControl):
-        outputString.append("UnknownFlowControl, ");
-        break;
+    //BF case (QSerialPort::FlowControl::UnknownFlowControl):
+    //     outputString.append("UnknownFlowControl, ");
+    //     break;
     }
 
     // outputString.append("DTR: " + QSerialPort::DataTerminalReadySignal);

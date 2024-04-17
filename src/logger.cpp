@@ -81,7 +81,7 @@ void Logger::writeLogTXTLine(QString lineToAppend, bool simplifyText)
     if (logFile != nullptr)
     {
         QTextStream out(logFile);
-        out.setCodec("UTF-8");
+        out.setEncoding(QStringConverter::Utf8);
 
         out << text + "\r";
     }
@@ -103,7 +103,7 @@ void Logger::writeLogTXTParsedData(QStringList labelList, QList<double> dataList
     if (logFile != nullptr)
     {
         QTextStream out(logFile);
-        out.setCodec("UTF-8");
+        out.setEncoding(QStringConverter::Utf8);
 
         out << text + "\r";
     }
@@ -139,7 +139,7 @@ void Logger::writeLogCSV(QStringList labelList, QList<double> dataList, bool add
     {
         canAddLabel = false;
 
-        QStringList origFile = out.readAll().split(QRegExp("[\r\n]"), QString::SplitBehavior::SkipEmptyParts);
+        QStringList origFile = out.readAll().split(QRegularExpression("[\r\n]"), Qt::SkipEmptyParts);
 
         for (auto i = 0; i < csvLabelsBuffer.count(); ++i)
             out << "\"" + csvLabelsBuffer[i] + "\",";

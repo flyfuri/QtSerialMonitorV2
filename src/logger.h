@@ -9,6 +9,7 @@
 #include <QtDebug>
 #include <QTextStream>
 #include <QTime>
+#include <QRegularExpression>
 
 class Logger : public QObject
 {
