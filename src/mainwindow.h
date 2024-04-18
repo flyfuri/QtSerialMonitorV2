@@ -151,6 +151,8 @@ private slots:
     void on_tracerShowPointValue(QMouseEvent *event);
     void on_updateSerialDeviceList();
 
+    void on_comboBoxBaudRates_currentIndexChanged(int index);
+
 private:
     // QCompleter *completer;
     FileReader fileReader;

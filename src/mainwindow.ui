@@ -248,8 +248,8 @@
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>648</width>
-                <height>100</height>
+                <width>662</width>
+                <height>98</height>
                </rect>
               </property>
               <property name="sizePolicy">
@@ -763,8 +763,8 @@ p, li { white-space: pre-wrap; }
                     <rect>
                      <x>0</x>
                      <y>0</y>
-                     <width>1136</width>
-                     <height>106</height>
+                     <width>1101</width>
+                     <height>104</height>
                     </rect>
                    </property>
                    <layout class="QGridLayout" name="gridLayout_24">
@@ -1118,7 +1118,6 @@ p, li { white-space: pre-wrap; }
                           </property>
                           <property name="font">
                            <font>
-                            <weight>50</weight>
                             <italic>false</italic>
                             <bold>false</bold>
                             <underline>true</underline>
@@ -1923,6 +1922,9 @@ p, li { white-space: pre-wrap; }
                </property>
                <property name="editable">
                 <bool>true</bool>
+               </property>
+               <property name="maxVisibleItems">
+                <number>20</number>
                </property>
                <property name="insertPolicy">
                 <enum>QComboBox::NoInsert</enum>
@@ -2924,7 +2926,6 @@ p, li { white-space: pre-wrap; }
              </property>
              <property name="font">
               <font>
-               <weight>50</weight>
                <bold>false</bold>
                <underline>true</underline>
               </font>
@@ -3242,7 +3243,7 @@ p, li { white-space: pre-wrap; }
      <x>0</x>
      <y>0</y>
      <width>1797</width>
-     <height>20</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">

@@ -82,6 +82,8 @@ void MainWindow::setupGUI()
         foreach (auto item, serial.getAvailibleBaudRates())
             ui->comboBoxBaudRates->addItem(QString::number(item));
 
+        ui->comboBoxBaudRates->addItem(QString::number(460800)); //ToDo provisional hack to see if its possible
+
         ui->comboBoxBaudRates->setCurrentIndex(ui->comboBoxBaudRates->count() / 2); // select middle
     }
     // ----------------------------------------------------------------- //
@@ -2549,3 +2551,12 @@ void MainWindow::on_actionto_csv_triggered()
 
     this->exportArraysToCSV(columnNames, columnsData, ',');
 }
+
+void MainWindow::on_comboBoxBaudRates_currentIndexChanged(int index)
+{
+    If(index = ui->comboBoxBaudRates->maxCount())
+    {
+
+    }
+}
+
