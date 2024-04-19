@@ -1921,7 +1921,7 @@ p, li { white-space: pre-wrap; }
                 <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;This list contains baud rates supported by current hardware.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
                </property>
                <property name="editable">
-                <bool>true</bool>
+                <bool>false</bool>
                </property>
                <property name="maxVisibleItems">
                 <number>20</number>

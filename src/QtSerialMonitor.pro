@@ -33,6 +33,7 @@ CONFIG += c++11
 
 SOURCES += \
         codeeditor.cpp \
+        custombaudratedialog.cpp \
         filereader.cpp \
         highlighter.cpp \
         infodialog.cpp \
@@ -45,6 +46,7 @@ SOURCES += \
         serial.cpp
 
 HEADERS += \
+        custombaudratedialog.h \
         qcustomplot.h \
         codeeditor.h \
         config.h \
@@ -59,6 +61,7 @@ HEADERS += \
         serial.h
 
 FORMS += \
+        custombaudratedialog.ui \
         infodialog.ui \
         mainwindow.ui
 

@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "ui_custombaudratedialog.h"
 #include "ui_mainwindow.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
@@ -80,11 +81,10 @@ void MainWindow::setupGUI()
     // ----------------------- standardBaudRates ----------------------- //
     {
         foreach (auto item, serial.getAvailibleBaudRates())
-            ui->comboBoxBaudRates->addItem(QString::number(item));
-
-        ui->comboBoxBaudRates->addItem(QString::number(460800)); //ToDo provisional hack to see if its possible
+            ui->comboBoxBaudRates->addItem(QString::number(item)); 
 
         ui->comboBoxBaudRates->setCurrentIndex(ui->comboBoxBaudRates->count() / 2); // select middle
+        ui->comboBoxBaudRates->addItem(QString("custom")); //custom shall only be selected actively by the user
     }
     // ----------------------------------------------------------------- //
 
@@ -112,6 +112,7 @@ void MainWindow::setupGUI()
     ui->lineEditLoadFilePath->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
     ui->lineEditSaveFileName->setText("Log.txt");
     ui->lineEditSaveLogPath->setText(qApp->applicationDirPath() + "/Logs");
+
     ui->splitterGraphTable->setSizes({this->height(), 0});
 
     emit on_checkBoxAutoLogging_toggled(ui->checkBoxAutoLogging->isChecked());
@@ -243,6 +244,21 @@ void MainWindow::settingsLoadAll()
     }
     // ------------------------- //
 
+    // ----- comboBoxBaudRates ----- //
+    {
+        QString baudrFromIni = appSettings.value("GUI_Elements/comboBoxBaudRates.currentText").toString();
+        if(ui->comboBoxBaudRates->findText(baudrFromIni) ==  -1)  //if not in list its probably custom and will be added
+        {
+            ui->comboBoxBaudRates->insertItem(ui->comboBoxBaudRates->count() -1, baudrFromIni);
+            ui->comboBoxBaudRates->setCurrentIndex(ui->comboBoxBaudRates->count() -2);
+        }
+        else
+        {
+            ui->comboBoxBaudRates->setCurrentIndex(appSettings.value("GUI_Elements/comboBoxBaudRates.currentIndex").value<int>());
+        }
+    }
+    // ------------------------- //
+
     // ----- Other GUI Elements ----- //
     {
         ui->checkBoxAppendDate->setChecked(appSettings.value("GUI_Elements/checkBoxAppendDate.isChecked").value<bool>());
@@ -265,7 +281,6 @@ void MainWindow::settingsLoadAll()
         ui->checkBoxTruncateFileOnSave->setChecked(appSettings.value("GUI_Elements/checkBoxTruncateFileOnSave.isChecked", false).value<bool>());
         ui->checkBoxWrapText->setChecked(appSettings.value("GUI_Elements/checkBoxWrapText.isChecked").value<bool>());
         ui->comboBoxAddTextMode->setCurrentIndex(appSettings.value("GUI_Elements/comboBoxAddTextMode.currentIndex").value<int>());
-        ui->comboBoxBaudRates->setCurrentIndex(appSettings.value("GUI_Elements/comboBoxBaudRates.currentIndex").value<int>());
         ui->comboBoxClockSource->setCurrentIndex(appSettings.value("GUI_Elements/comboBoxClockSource.currentIndex").value<int>());
         ui->comboBoxDataBits->setCurrentIndex(appSettings.value("GUI_Elements/comboBoxDataBits.currentIndex").value<int>());
         ui->comboBoxExternalTimeFormat->setCurrentIndex(appSettings.value("GUI_Elements/comboBoxExternalTimeFormat.currentIndex").value<int>());
@@ -378,6 +393,7 @@ void MainWindow::settingsSaveAll()
         appSettings.setValue("GUI_Elements/checkBoxWrapText.isChecked", ui->checkBoxWrapText->isChecked());
         appSettings.setValue("GUI_Elements/comboBoxAddTextMode.currentIndex", ui->comboBoxAddTextMode->currentIndex());
         appSettings.setValue("GUI_Elements/comboBoxBaudRates.currentIndex", ui->comboBoxBaudRates->currentIndex());
+        appSettings.setValue("GUI_Elements/comboBoxBaudRates.currentText", ui->comboBoxBaudRates->currentText());
         appSettings.setValue("GUI_Elements/comboBoxClockSource.currentIndex", ui->comboBoxClockSource->currentIndex());
         appSettings.setValue("GUI_Elements/comboBoxDataBits.currentIndex", ui->comboBoxDataBits->currentIndex());
         appSettings.setValue("GUI_Elements/comboBoxExternalTimeFormat.currentIndex", ui->comboBoxExternalTimeFormat->currentIndex());
@@ -2554,9 +2570,11 @@ void MainWindow::on_actionto_csv_triggered()
 
 void MainWindow::on_comboBoxBaudRates_currentIndexChanged(int index)
 {
-    If(index = ui->comboBoxBaudRates->maxCount())
+    if(index == ui->comboBoxBaudRates->count() -1 && ui->comboBoxBaudRates->hasFocus()) //if baudrate "custom" has been chosen
     {
+        CustomBaudrateDialog *customBaudrDialog = new CustomBaudrateDialog(this, "460800", ui->comboBoxBaudRates);
 
+        customBaudrDialog->show();
     }
 }
 

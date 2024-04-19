@@ -9,6 +9,7 @@
 #include "qcustomplot.h"
 #include "serial.h"
 #include "infodialog.h"
+#include "custombaudratedialog.h"
 #include "highlighter.h"
 
 #include <QCloseEvent>
