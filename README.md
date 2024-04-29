@@ -21,6 +21,7 @@ Otherwise one of the following branches could be used (all Qt6):
 |-------|------------------|--------------------------|
 |"Qt6"| same as the original but for Qt6|seems to work (only tested with Serial)|
 |"CustomBaudDialog"| improved GUI for custom baudrate |seems to work (only tested with Serial)|
+|TsourceImproved|improved and added timestamp sources|only works with Serial, rest will be done later|
 
 branch main contains all the latest changes with status "seems to work"
 
@@ -44,7 +45,8 @@ Output parameters can be chosen by sending commands to the ESP. See the commands
 #endif
 
 float signals[6] = {0,0,0,0,0,0};
-unsigned long target_intervall = 2000; //ms
+unsigned long target_intervall = 2000; //micros
+unsigned int work_micros;
 
 unsigned long t_lastcycl, t_now, t_cycletime, t_cyclt_print; //measure cycle time
 //log settings
@@ -55,9 +57,10 @@ bool log_options[LOG_OPTIONS_SIZE] = {0,1,1,1,1,1,0};
 float log_tempmem[LOG_OPTIONS_SIZE];
 String log_labels[LOG_OPTIONS_SIZE];
 enum LOGMODE{
-  VAL = 0, 
-  LABEL_COLON_SPACE_VAL_TAB,
-  LABEL_EQUAL_VAL_SPACE
+  DEVAULT = 0,  //same as VAL (get rid of 0 index)
+  VAL, //just value separated by separetor  expl.: "1.23 4.56" (Graph 0 and Graph 1)
+  LABEL_COLON_SPACE_VAL_TAB,  //  expl.: "Roll = 1.23 Pitch = 45.6"
+  LABEL_EQUAL_VAL_SPACE  // expl.: "Voltage: 1.23 (tabulator) Output: 4.56"
 } log_mode;
 
 
@@ -76,6 +79,9 @@ void setup() {
 float thisByte = 0.0f;
 
 void loop() {
+
+  //work simulated
+  delayMicroseconds(work_micros);
 
   signals[1] = (sin(thisByte)*100.0f);
   signals[2] = (cos(thisByte)*100.0f);
@@ -119,9 +125,13 @@ void loop() {
 //   t    activate/disactivate cycletime (should be lower than 2000 micros)
 //   r    deactivate all debug infos
 //   ?    list acivated infos (not implemented completly)
-//   i200..i10000 set target interval to micros
-//   i    print target_intervall
+//   i200..i1000000 set target interval to micros
+//   i?    print target_intervall
 //   m1..m3 set logmode
+//   m?  print logmode
+//   d1..d1000000  work delay of in micros
+//   d or d0  reset (diactivates) work delay
+//   d? print workdelay
 //   1..  any positive number activates the corresponding information to be sent (options check code below)
 //   -1.. any negative number disactivates the corresponding information 
 
@@ -136,6 +146,11 @@ void debuglogs(){
     log_command.remove(0,1);
     intcmd = log_command.toInt();
     log_command = "m";
+  }
+  else if (log_command.startsWith("d") && !log_command.startsWith("d?") && !log_command.startsWith("d0")){ 
+    log_command.remove(0,1);
+    intcmd = log_command.toInt();
+    log_command = "d";
   }
   else{
     intcmd = log_command.toInt();
@@ -191,19 +206,27 @@ void debuglogs(){
       Serial.println(target_intervall);
       delay(3000);
   }
+  else if(log_command == "d" && intcmd >= 1 && intcmd <= 1000000){
+    work_micros = intcmd;
+  }
+  else if(log_command == "d0"){
+    work_micros = 0;
+  }
+  else if(log_command == "d?"){
+      Serial.print(" work_daly_micros: ");
+      Serial.println(work_micros);
+      delay(3000);
+  }
   else if(log_command == "m" && intcmd >= 1 && intcmd <= 3){ 
-    if (intcmd == 0){log_mode = VAL;}
-    else if (intcmd == 1){log_mode = LABEL_COLON_SPACE_VAL_TAB;}
-    else if (intcmd == 2){log_mode = LABEL_EQUAL_VAL_SPACE;}
-    Serial.println(log_command);
-    Serial.println(intcmd);
-    delay(1500);
+    if (intcmd == 1){log_mode = VAL;}
+    else if (intcmd == 2){log_mode = LABEL_COLON_SPACE_VAL_TAB;}
+    else if (intcmd == 3){log_mode = LABEL_EQUAL_VAL_SPACE;}
   }
   else if(log_command == "m?"){
       Serial.print(" logmode: ");
-      if (log_mode == LOGMODE::VAL){Serial.print("0");}
-      else if (log_mode == LOGMODE::LABEL_COLON_SPACE_VAL_TAB){Serial.print("1");}
-      else if (log_mode == LOGMODE::LABEL_EQUAL_VAL_SPACE){Serial.print("2");}
+      if (log_mode == LOGMODE::VAL){Serial.print("1");}
+      else if (log_mode == LOGMODE::LABEL_COLON_SPACE_VAL_TAB){Serial.print("2");}
+      else if (log_mode == LOGMODE::LABEL_EQUAL_VAL_SPACE){Serial.print("3");}
       delay(3000);
   }
   
