@@ -151,8 +151,8 @@ private slots:
     void on_toolButtonHideTable_clicked();
     void on_tracerShowPointValue(QMouseEvent *event);
     void on_updateSerialDeviceList();
-
     void on_comboBoxBaudRates_currentIndexChanged(int index);
+    void on_comboBoxExternalTimeFormat_currentIndexChanged(int index);
 
 private:
     // QCompleter *completer;
@@ -170,8 +170,10 @@ private:
     QTimer *serialDeviceCheckTimer;
     QTimer *serialStringProcessingTimer;
     QTimer *udpStringProcessingTimer;
-    Serial serial;
+    serial::Serial serial;
     Ui::MainWindow *ui;
+    serial::SERIAL_TSTAMP_MODE timestampMode;
+    double chartTimebase = 1e3; //usually 1e3 for ms or 1e6 for micros
     void addLog(QString text, bool appendAsLine = false);
     void addLogBytes(QByteArray bytes, bool hexToBinary = false, bool appendAsLine = false);
     void chartPrintPreview();

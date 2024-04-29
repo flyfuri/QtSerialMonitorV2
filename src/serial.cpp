@@ -1,4 +1,7 @@
 #include "serial.h"
+#include <QDebug>
+
+namespace serial{
 
 Serial::Serial(QObject *parent) : QObject(parent)
 {
@@ -10,6 +13,16 @@ Serial::~Serial()
     end();
 }
 
+void Serial::addTstampString(QString &targetString)
+{
+    switch (timestampMode)
+    {
+    case SysTimeStamp:
+        targetString.insert(targetString.lastIndexOf("\r"),
+                                  "RDTSTAMP" + QString::number(tstClock.currentTime().msecsSinceStartOfDay()));
+    }   //all others don't create a timestamp at read, but more might come in the future
+}
+
 void Serial::readString()
 {
     switch (stringReadMode)
@@ -18,26 +31,52 @@ void Serial::readString()
         while (this->serialDevice->canReadLine())
         {
             serialInputString.append(serialDevice->readLine());
+            addTstampString(serialInputString);
         }
         break;
     case canReadLine_ReadAll:
-        while (this->serialDevice->canReadLine())
-        {
-            serialInputString.append(serialDevice->readAll());
+        { //added scope to keep the tmps alive
+            QString tmp_read;
+            while (this->serialDevice->canReadLine())
+            {
+                tmp_read = serialDevice->readAll();
+                addTstampString(tmp_read);
+                serialInputString.append(tmp_read);
+            }
+            break;
         }
-        break;
     case bytesAvailable_ReadLine:
-        while (this->serialDevice->bytesAvailable())
-        {
-            serialInputString.append(serialDevice->readLine());
+        { //added scope to keep the tmps alive
+            QString tmp_read;
+            while (this->serialDevice->bytesAvailable())
+            {
+                //ToDo delete: serialInputString.append(serialDevice->readLine());
+                tmp_read = serialDevice->readLine();
+                if (tmp_read.startsWith("\n")){tmp_read.remove(0,1);}
+                addTstampString(tmp_read);
+                if (!tmp_read.isEmpty())
+                {
+                    serialInputString.append(tmp_read);
+                }
+            }
+            break;
         }
-        break;
     case bytesAvailable_ReadAll:
-        while (this->serialDevice->bytesAvailable())
-        {
-            serialInputString.append(serialDevice->readAll());
+        { //added scope to keep the tmps alive
+            QString tmp_read;
+            while (this->serialDevice->bytesAvailable())
+            {
+                //ToDo delete: serialInputString.append(serialDevice->readAll());
+                tmp_read = serialDevice->readAll();
+                if (tmp_read.startsWith("\n")){tmp_read.remove(0,1);}
+                addTstampString(tmp_read);
+                if (!tmp_read.isEmpty())
+                {
+                    serialInputString.append(tmp_read);
+                }
+            }
+            break;
         }
-        break;
     }
 }
 
@@ -63,6 +102,19 @@ bool Serial::setReadMode(int mode)
         stringReadMode = bytesAvailable_ReadAll;
         break;
     default:
+        return false;
+    }
+    return true;
+}
+
+bool Serial::setTimestampMode(int mode){
+    if(mode == 0){timestampMode = serial::SysTimeStamp;}
+    else if(mode == 1){timestampMode = serial::ExternalTStamp;}
+    else if(mode == 2){timestampMode = serial::NoTStamp;}
+    else if(mode == 3){timestampMode = serial::FixIntervalTStamp;}
+    else
+    {
+        timestampMode = serial::NoTStamp;
         return false;
     }
     return true;
@@ -330,3 +382,6 @@ bool Serial::send(const QByteArray &message)
         return false;
     }
 }
+
+
+} //end namespace

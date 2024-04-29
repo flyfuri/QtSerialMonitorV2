@@ -2,13 +2,14 @@
 
 Parser::Parser(QObject *parent) : QObject(parent)
 {
-    parserTimer = new QElapsedTimer;
-    parserClock = new QTime;
-    parserTimer->start();
-    latestTimeStamp.setHMS(0, 0, 0, 0);
+    //ToDo why originally on the heap? parserTimer = new QElapsedTimer;
+    //ToDo why originally on the heap?  parserClock = new QTime;
+    parserTimer.start();
+    latestTimeStamp_Time.setHMS(0, 0, 0, 0);
 }
 
-void Parser::parse(QString inputString, bool syncToSystemClock, bool useExternalClock, QString externalClockLabel)
+void Parser::parse(QString inputString, QString externalClockLabel, serial::SERIAL_TSTAMP_MODE tstampmode,
+                   int fixinterval, double timebase_s)
 {
     //    \s Matches a whitespace character (QChar::isSpace()).
     //    QStringList list = str.split(QRegExp("\\s+"), QString::SkipEmptyParts);
@@ -37,21 +38,34 @@ void Parser::parse(QString inputString, bool syncToSystemClock, bool useExternal
             break;
         }
 
-        QRegularExpression mainSymbols("[+-]?\\d*\\.?\\d+"); // float only   //  QRegularExpression mainSymbols("[-+]?[0-9]*\.?[0-9]+");
+        QRegularExpression mainSymbols("^[-+]?[0-9]*\\.?[0-9]+$"); // float only   //  QRegularExpression mainSymbols("[-+]?[0-9]*\.?[0-9]+");
         QRegularExpression alphanumericSymbols("\\w+");
-        QRegularExpression sepSymbols("[=,]");
+        QRegularExpression sepSymbols("[\t=,;]");
 
         inputStringSplitArrayLines[l].replace(sepSymbols, " ");
         QStringList inputStringSplitArray = inputStringSplitArrayLines[l].simplified().split(QRegularExpression("\\s+"), Qt::SplitBehaviorFlags::SkipEmptyParts); // rozdzielamy traktująac spacje jako separator
 
+        if (tstampmode == serial::SysTimeStamp && inputStringSplitArray.last().contains("RDTSTAMP")){
+            QTime tmpTime = latestTimeStamp_Time.fromMSecsSinceStartOfDay(
+                inputStringSplitArray.last().replace("RDTSTAMP", "").toInt());
+            if(tmpTime.isValid())
+            {
+                latestTimeStamp_Time = tmpTime;
+            }
+            else
+            {
+                latestTimeStamp_Time = latestTimeStamp_Time.addMSecs(fixinterval); //ToDo find out whats best when timestamp tag not present..
+            }
+            inputStringSplitArray.removeLast();
+        }
         for (auto i = 0; i < inputStringSplitArray.count(); ++i)
         {
             // Find external time...
-            if (useExternalClock)
+            if (tstampmode == serial::ExternalTStamp)  //ToDo time format as intervals...
             {
                 if (externalClockLabel.isEmpty() == false && inputStringSplitArray[i] == externalClockLabel)
                 {
-                    latestTimeStamp = QTime::fromMSecsSinceStartOfDay(inputStringSplitArray[i + 1].toInt());
+                    latestTimeStamp_Time = QTime::fromMSecsSinceStartOfDay(inputStringSplitArray[i + 1].toInt());
                 }
                 else if (externalClockLabel.isEmpty() == true)
                 {
@@ -59,14 +73,14 @@ void Parser::parse(QString inputString, bool syncToSystemClock, bool useExternal
                     {
                         if (QTime::fromString(inputStringSplitArray[i], timeFormat).isValid())
                         {
-                            latestTimeStamp = QTime::fromString(inputStringSplitArray[i], timeFormat);
+                            latestTimeStamp_Time = QTime::fromString(inputStringSplitArray[i], timeFormat);
                             break;
                         }
                     }
 
                     if (minimumTime != QTime(0, 0, 0) && maximumTime != QTime(0, 0, 0))
                     {
-                        if (latestTimeStamp < minimumTime || latestTimeStamp > maximumTime)
+                        if (latestTimeStamp_Time < minimumTime || latestTimeStamp_Time > maximumTime)
                         {
                             continue;
                         }
@@ -95,16 +109,22 @@ void Parser::parse(QString inputString, bool syncToSystemClock, bool useExternal
                 continue; // We didnt find or add any new data points so lets not log time and skip to the next element on the list...
             }
 
-            if (useExternalClock)
+            if (tstampmode == serial::ExternalTStamp)
             {
-                listTimeStamp.append(latestTimeStamp.msecsSinceStartOfDay());
+                listTimeStamp.append(latestTimeStamp_Time.msecsSinceStartOfDay());
             }
-            else
+            else if (tstampmode == serial::SysTimeStamp)
             {
-                if (syncToSystemClock)
-                    listTimeStamp.append(parserClock->currentTime().msecsSinceStartOfDay());
-                else
-                    listTimeStamp.append(parserTimer->elapsed());
+               listTimeStamp.append(latestTimeStamp_Time.msecsSinceStartOfDay()); // old listTimeStamp.append(parserClock.currentTime().msecsSinceStartOfDay());
+            }
+            else if (tstampmode == serial::FixIntervalTStamp)
+            {
+                latestTimeStamp_Time = latestTimeStamp_Time.addMSecs(fixinterval); //ToDo micros
+                listTimeStamp.append(latestTimeStamp_Time.msecsSinceStartOfDay());
+            }
+            else //tstampmode == serial::NoTStamp
+            {
+                listTimeStamp.append(parserTimer.elapsed());
             }
         }
     }
@@ -137,7 +157,7 @@ void Parser::parseCSV(QString inputString, bool useExternalLabel, QString extern
             break;
         }
 
-        QRegularExpression mainSymbols(QRegularExpression::anchoredPattern("[+-]?\\d*\\.?\\d+")); // float only   //  QRegExp mainSymbols("[-+]?[0-9]*\.?[0-9]+");
+        QRegularExpression mainSymbols("^[-+]?[0-9]*\\.?[0-9]+$");//(QRegularExpression::anchoredPattern("[+-]?\\d*\\.?\\d+")); // float only   //  QRegExp mainSymbols("[-+]?[0-9]*\.?[0-9]+");
         QRegularExpression alphanumericSymbols("\\w+");
         QRegularExpression sepSymbols("[=,]");
 
@@ -151,7 +171,7 @@ void Parser::parseCSV(QString inputString, bool useExternalLabel, QString extern
         {
             for (auto i = 0; i < inputStringSplitArray.count(); ++i)
             {
-                if (!mainSymbols.match(inputStringSplitArray[i]).hasMatch())
+                if (!sepSymbols.match(inputStringSplitArray[i]).hasMatch())
                 {
                     if (!csvLabels.contains(inputStringSplitArray[i]))
                         csvLabels.append(inputStringSplitArray[i]);
@@ -166,9 +186,9 @@ void Parser::parseCSV(QString inputString, bool useExternalLabel, QString extern
             {
                 qDebug() << "inputStringSplitArray: " + QString::number(inputStringSplitArray[i].toFloat());
 
-                latestTimeStamp = QTime::fromMSecsSinceStartOfDay((int)inputStringSplitArray[i].toFloat());
+                latestTimeStamp_Time = QTime::fromMSecsSinceStartOfDay((int)inputStringSplitArray[i].toFloat());
                 qDebug() << "TIME: " + QString::number(inputStringSplitArray[i].toFloat());
-                qDebug() << "latestTimeStamp: " + latestTimeStamp.toString();
+                qDebug() << "latestTimeStamp: " + latestTimeStamp_Time.toString();
                 break;
             }
             else if (useExternalLabel == false)
@@ -177,11 +197,11 @@ void Parser::parseCSV(QString inputString, bool useExternalLabel, QString extern
                 {
                     if (QTime::fromString(inputStringSplitArray[i], timeFormat).isValid())
                     {
-                        latestTimeStamp = QTime::fromString(inputStringSplitArray[i], timeFormat);
+                        latestTimeStamp_Time = QTime::fromString(inputStringSplitArray[i], timeFormat);
 
                         if (minimumTime != QTime(0, 0, 0) && maximumTime != QTime(0, 0, 0))
                         {
-                            if (latestTimeStamp < minimumTime || latestTimeStamp > maximumTime)
+                            if (latestTimeStamp_Time < minimumTime || latestTimeStamp_Time > maximumTime)
                             {
                                 continue;
                             }
@@ -202,7 +222,7 @@ void Parser::parseCSV(QString inputString, bool useExternalLabel, QString extern
                     continue; // TODO ERROR REPORTING
                 stringListLabels.append(csvLabels[i]);
                 listNumericData.append(inputStringSplitArray[i].toDouble());
-                listTimeStamp.append(latestTimeStamp.msecsSinceStartOfDay());
+                listTimeStamp.append(latestTimeStamp_Time.msecsSinceStartOfDay());
             }
         }
     }
@@ -239,11 +259,17 @@ QStringList Parser::getLabelStorage() { return labelStorage; }
 QStringList Parser::getStringListLabels() { return stringListLabels; }
 QStringList Parser::getStringListNumericData() { return stringListNumericData; }
 QStringList Parser::getTextList() { return textStorage; }
-void Parser::clearExternalClock() { latestTimeStamp.setHMS(0, 0, 0, 0); }
-void Parser::restartChartTimer() { parserTimer->restart(); }
+void Parser::clearExternalClock() { latestTimeStamp_Time.setHMS(0, 0, 0, 0); }
+
+void Parser::restartChartTimer()
+{
+    parserTimer.restart();
+
+}
+
 void Parser::parserClockAddMSecs(int millis)
 {
-    parserClock->addMSecs(millis);
+    parserClock.addMSecs(millis);
     // parserTimer->start();
 }
 

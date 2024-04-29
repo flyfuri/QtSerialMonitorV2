@@ -107,7 +107,7 @@ void MainWindow::setupGUI()
     }
     // ----------------------------------------------------------------- //
 
-    ui->comboBoxExternalTimeFormat->addItem("[ms]");
+
     ui->comboBoxExternalTimeFormat->setCurrentIndex(0);
     ui->lineEditLoadFilePath->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
     ui->lineEditSaveFileName->setText("Log.txt");
@@ -595,8 +595,8 @@ void MainWindow::on_chartBeforeReplotSlot()
     {
         if (parser.getListTimeStamp().count() > 0)
         {
-            ui->widgetChart->xAxis->setRange((parser.getListTimeStamp().last() / 1000.0) + (ui->spinBoxScrollingTimeRange->value() * 0.05),
-                                             ui->spinBoxScrollingTimeRange->value(), Qt::AlignRight);
+            ui->widgetChart->xAxis->setRange((parser.getListTimeStamp().last() * chartTimebase) + (ui->spinBoxScrollingTimeRange->value() * 0.05),
+                                             ui->spinBoxScrollingTimeRange->value(), Qt::AlignRight);  //ToDo review the 0.05 above
         }
 
         if (ui->checkBoxAutoRescaleY->isChecked())
@@ -1042,7 +1042,8 @@ void MainWindow::on_processSerial()
 
     if (serialInput.isEmpty() == false)
     {
-        parser.parse(serialInput, ui->comboBoxClockSource->currentIndex() == 0, ui->comboBoxClockSource->currentIndex() == 1, ui->lineEditExternalClockLabel->text()); // Parse string - split into labels + numeric data
+        parser.parse(serialInput, ui->lineEditExternalClockLabel->text(), timestampMode, // Parse string - split into labels + numeric data
+                     ui->spinBoxFixIntervalTime->value(), chartTimebase);
         QStringList labelList = parser.getStringListLabels();
         QList<double> numericDataList = parser.getListNumericValues();
         QList<long> timeStamps = parser.getListTimeStamp();
@@ -1097,7 +1098,8 @@ void MainWindow::on_processUDP()
 
     if (udpInput.isEmpty() == false)
     {
-        parser.parse(udpInput, ui->comboBoxClockSource->currentIndex() == 0, ui->comboBoxClockSource->currentIndex() == 1, ui->lineEditExternalClockLabel->text()); // Parse string - split into labels + numeric data
+        parser.parse(udpInput, ui->lineEditExternalClockLabel->text(), timestampMode,  // Parse string - split into labels + numeric data
+                     ui->spinBoxFixIntervalTime->value(), chartTimebase);
         QStringList labelList = parser.getStringListLabels();
         QList<double> numericDataList = parser.getListNumericValues();
         QList<long> timeStamps = parser.getListTimeStamp();
@@ -1206,14 +1208,14 @@ void MainWindow::processChart(QStringList labelList, QList<double> numericDataLi
             if (labelList[j] == ui->widgetChart->graph(i)->name()) // If label matches the graphs name - we can start add points to it
             {
                 if (timeStampsList[j] > 0) // if == 0 then we assume that no external clock was parsed propely
-                    ui->widgetChart->graph(i)->addData(timeStampsList[j] / 1000.0, numericDataList[j]);
+                    ui->widgetChart->graph(i)->addData(timeStampsList[j] * chartTimebase, numericDataList[j]);
 
                 // break; // no break - slower but if we keep checking for duplicates, we can add multiple points at once
             }
         }
 
         if (ui->spinBoxMaxTimeRange->value() > 0)
-            ui->widgetChart->graph(i)->data().data()->removeBefore((timeStampsList.last() / 1000.0) - ui->spinBoxMaxTimeRange->value()); // Remove old points
+            ui->widgetChart->graph(i)->data().data()->removeBefore((timeStampsList.last() * chartTimebase) - ui->spinBoxMaxTimeRange->value()); // Remove old points
 
         if (ui->spinBoxRemoveOldLabels->value() > 0)
         {
@@ -2087,7 +2089,7 @@ void MainWindow::on_pushButtonLoadPath_clicked()
 
 void MainWindow::on_processLoadedFileLine(QString *line, int *progressPercent)
 {
-    parser.parse(*line, true, true, ""); // Parse string - split into labels + numeric data
+    parser.parse(*line, "", serial::NoTStamp); //ToDo true true// Parse string - split into labels + numeric data
     QStringList labelList = parser.getStringListLabels();
     QList<double> numericDataList = parser.getListNumericValues();
     QList<long> timeStampList = parser.getListTimeStamp();
@@ -2116,9 +2118,9 @@ void MainWindow::on_processLoadedFile(QString *text)
 
     // Select file type
     if (ui->comboBoxLogFormat->currentIndex() == 0)
-        parser.parseCSV(*text, (bool)ui->comboBoxClockSource->currentIndex() == 1, ui->lineEditExternalClockLabel->text());
+        parser.parseCSV(*text, (bool)ui->comboBoxClockSource->currentIndex() == 1, ui->lineEditExternalClockLabel->text()); //ToDo
     else
-        parser.parse(*text, false, true, "");
+        parser.parse(*text, "", serial::NoTStamp); //ToDo false, true
 
     // disconnect events, reset parser
     parser.resetTimeRange();
@@ -2286,7 +2288,35 @@ void MainWindow::on_checkBoxAutoSaveBuffer_toggled(bool checked)
 }
 
 void MainWindow::on_comboBoxClockSource_currentIndexChanged(int index)
-{
+{  //ToDo potential for improvement... whole settings seems to be a bit overcomplicated...
+    if(index == 0)
+    {
+        timestampMode = serial::SysTimeStamp;
+        ui->stackedWidgetClockSourceParam->setCurrentIndex(0);
+    }
+    else if(index == 1)
+    {
+        timestampMode = serial::ExternalTStamp;
+        ui->stackedWidgetClockSourceParam->setCurrentIndex(1);
+    }
+    else if(index == 2)
+    {
+        timestampMode = serial::NoTStamp;
+        ui->stackedWidgetClockSourceParam->setCurrentIndex(0);
+    }
+    else if(index == 3)
+    {
+        timestampMode = serial::FixIntervalTStamp;
+        ui->stackedWidgetClockSourceParam->setCurrentIndex(2);
+    }
+    else
+    {
+        timestampMode = serial::NoTStamp;
+        ui->stackedWidgetClockSourceParam->setCurrentIndex(0);
+    }
+
+    serial.setTimestampMode(index);
+
     if (index == 1)
     {
         ui->lineEditExternalClockLabel->setEnabled(true);
@@ -2294,8 +2324,8 @@ void MainWindow::on_comboBoxClockSource_currentIndexChanged(int index)
     }
     else
     {
-        ui->lineEditExternalClockLabel->setEnabled(false);
-        ui->comboBoxExternalTimeFormat->setEnabled(false);
+        ui->lineEditExternalClockLabel->setEnabled(true); //ToDo(false);
+        ui->comboBoxExternalTimeFormat->setEnabled(true); //ToDo(false);
     }
 }
 
@@ -2575,6 +2605,24 @@ void MainWindow::on_comboBoxBaudRates_currentIndexChanged(int index)
         CustomBaudrateDialog *customBaudrDialog = new CustomBaudrateDialog(this, "460800", ui->comboBoxBaudRates);
 
         customBaudrDialog->show();
+    }
+}
+
+void MainWindow::on_comboBoxExternalTimeFormat_currentIndexChanged(int index)
+{
+    switch(index)
+    {
+    case 1:
+        chartTimebase = 1e-3; //ms
+        ui->spinBoxFixIntervalTime->setRange(1,60000);
+        break;
+    case 2:
+        chartTimebase = 1e-6; //micros
+        ui->spinBoxFixIntervalTime->setRange(200,60000);
+        break;
+    default:
+        chartTimebase = 1; //second
+        ui->spinBoxFixIntervalTime->setRange(1,3600);
     }
 }
 

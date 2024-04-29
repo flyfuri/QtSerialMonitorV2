@@ -8,6 +8,7 @@
 #include <QTimer>
 #include <QApplication>
 #include <QRegularExpression>
+#include "serial.h"
 
 class Parser : public QObject
 {
@@ -28,7 +29,8 @@ public:
     void clear();
     void clearExternalClock();
     void clearStorage();
-    void parse(QString inputString, bool syncToSystemClock = true, bool useExternalClock = false, QString externalClockLabel = QString());
+    void parse(QString inputString, QString externalClockLabel, serial::SERIAL_TSTAMP_MODE tstampmode=serial::NoTStamp,
+               int fixinterval = 2, double timebase_s = 0.001);
     void parseCSV(QString inputString, bool useExternalLabel = false, QString externalClockLabel = "");
     void parserClockAddMSecs(int millis);
     void resetTimeRange();
@@ -44,6 +46,7 @@ private:
     bool canReportProgress = false;
     float parsingProgressPercent = 0.0f;
     int lineCount = 0;
+    serial::SERIAL_TSTAMP_MODE timestampMode = serial::FixIntervalTStamp; //ToDo serial::NoTStamp;
     QList<double> dataStorage;
     QList<double> listNumericData;
     QList<long> listTimeStamp;
@@ -51,9 +54,10 @@ private:
     QStringList labelStorage;
     QStringList stringListNumericData, stringListLabels;
     QStringList textStorage;
-    QElapsedTimer *parserTimer;
-    QTime *parserClock;
-    QTime latestTimeStamp;
+    QElapsedTimer parserTimer;
+    QTime parserClock;
+    QTime latestTimeStamp_Time;
+    int latestTimeStamp_ms;
     QTime minimumTime, maximumTime;
 };
 

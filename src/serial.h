@@ -4,6 +4,10 @@
 #include <QObject>
 #include <QSerialPort>
 #include <QSerialPortInfo>
+#include <QTime>
+#include <QElapsedTimer>
+
+namespace serial{
 
 enum SERIAL_READ_MODE
 {
@@ -11,6 +15,14 @@ enum SERIAL_READ_MODE
     canReadLine_ReadAll,
     bytesAvailable_ReadLine,
     bytesAvailable_ReadAll
+};
+
+enum SERIAL_TSTAMP_MODE
+{
+    SysTimeStamp = 0,
+    ExternalTStamp,
+    NoTStamp,
+    FixIntervalTStamp,
 };
 
 class Serial : public QObject
@@ -26,6 +38,7 @@ public:
     bool send(const QByteArray &message);
     bool send(QString message);
     bool setReadMode(int mode);
+    bool setTimestampMode(int mode);
     int getAvailiblePortsCount();
     QList<QSerialPortInfo> getAvailiblePorts();
     QString getSerialInfo();
@@ -40,8 +53,19 @@ public slots:
 
 private:
     QSerialPort *serialDevice = nullptr;
-    QString serialInputString;
+    QString serialInputString; //read from device
+
+
+    //ToDo QElapsedTimer *tstTimer; //Timer for Tstamp
+    QTime tstClock; //Clock for Tstamp
+    //ToDolong actTstamp; //actual/last Tstamp
+
     SERIAL_READ_MODE stringReadMode = canReadLine_ReadLine;
+    SERIAL_TSTAMP_MODE timestampMode= NoTStamp;
+
+    void addTstampString(QString &targetString); //creates timestamp for line depending on mode
+
 };
 
+} //end namespace
 #endif // SERIAL_H
