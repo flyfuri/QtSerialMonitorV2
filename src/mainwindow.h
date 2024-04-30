@@ -33,6 +33,7 @@
 #include <QTextStream>
 #include <QTime>
 #include <QTimer>
+#include <QScopedPointer>
 
 namespace Ui
 {
@@ -46,6 +47,10 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+signals:
+    void closeConnection(QObject *signalingObject, QThread *threadToMoveTo = nullptr);
+    void sendString(QString message);
 public slots:
     void on_processLoadedFile(QString *text);
     void on_processLoadedFileLine(QString *line, int *progressPercent);
@@ -111,7 +116,7 @@ private slots:
     void on_printIntroChangelog();
     void on_printLog(QPrinter *printer);
     void on_printPlot(QPrinter *printer);
-    void on_processSerial();
+    void on_processSerial(QString dataToParse);
     void on_processUDP();
     void on_pushButtonAddDateTime_clicked();
     void on_pushButtonClear_clicked();

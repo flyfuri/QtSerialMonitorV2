@@ -1017,10 +1017,10 @@ void MainWindow::processLogWrite(QString rawLine, QStringList labelList, QList<d
     }
 }
 
-void MainWindow::on_processSerial()
+void MainWindow::on_processSerial(QString dataToParse)
 {
-    QString serialInput = serial.getString();
-    serial.clearAll();
+    QString serialInput = dataToParse; /*serial.getString(); //ToDo clean up
+    serial.clearAll();*/
 
     if (ui->comboBoxTextProcessing->currentIndex() == 1) // Append text to textBrowser
         serialInput = serialInput.trimmed();
@@ -1356,8 +1356,10 @@ void MainWindow::sendSerial(QString message) // TODO - move to serial - error vi
         message = message + "\r\n";
     }
 
-    if (!serial.send(message))
-        this->addLog("App >>\t Unable to send! Serial port closed !", true);
+    emit sendString(message);
+
+    // if (!serial.send(message))
+    //     this->addLog("App >>\t Unable to send! Serial port closed !", true);
 }
 
 void MainWindow::saveToRAM(QStringList newlabelList, QList<double> newDataList, QList<long> newTimeList, bool saveText, QString text)
@@ -1648,10 +1650,25 @@ void MainWindow::on_pushButtonSerialConnect_toggled(bool checked)
             if (ui->pushButtonLogging->isChecked() && fileLogger.isOpen() == false) // logger on standby ?
                 fileLogger.beginLog(ui->lineEditSaveLogPath->text(), ui->checkBoxAutoLogging->isChecked(), ui->lineEditSaveFileName->text(), ui->checkBoxTruncateFileOnSave->isChecked());
 
-            connect(serialStringProcessingTimer, SIGNAL(timeout()), this, SLOT(on_processSerial()));
-
+            //connect(serialStringProcessingTimer, SIGNAL(timeout()), this, SLOT(on_processSerial()));
+            connect(&serial, SIGNAL(dataToParseReady(QString)), this, SLOT(on_processSerial(QString)), Qt::ConnectionType::QueuedConnection);
             addLog("App >>\t Serial port opened. " + serial.getSerialInfo() + " DTR: " + QString::number(ui->checkBoxDTR->isChecked()), true);
             ui->pushButtonSerialConnect->setText("Disconnect");
+
+            //move to its own thread while connected
+            QThread *thread = new QThread();
+            thread->setObjectName("serialtask");
+
+            connect(&serial, SIGNAL(dataToParseReady(QString)), this, SLOT(on_processSerial(QString)));
+            connect(this, SIGNAL(sendString(QString)), &serial, SLOT(send(QString)));
+            connect(thread,&QThread::started,&serial,&serial::Serial::run);
+            connect(this, SIGNAL(closeConnection(QObject*,QThread*)), &serial, SLOT(end(QObject*,QThread*)));
+            connect(&serial, SIGNAL(disconnected(bool)), thread, SLOT(quit()));
+            connect(thread,&QThread::finished,thread,&QThread::deleteLater);
+
+            qDebug() << "before move to thread" << QThread::currentThread();
+            serial.moveToThread(thread);
+            thread->start(QThread::HighPriority);
         }
         else
         {
@@ -1661,20 +1678,25 @@ void MainWindow::on_pushButtonSerialConnect_toggled(bool checked)
     }
     else
     {
-        serialStringProcessingTimer->stop();
+        //serialStringProcessingTimer->stop();
 
-        disconnect(serialStringProcessingTimer, SIGNAL(timeout()), this, SLOT(on_processSerial()));
+        //disconnect(serialStringProcessingTimer, SIGNAL(timeout()), this, SLOT(on_processSerial())); ToDo
+        disconnect(&serial, SIGNAL(dataToParseReady(QString)), this, SLOT(on_processSerial(QString)));
 
-        if (serial.end())
-        {
-            addLog("App >>\t Connection closed.", true);
-            ui->pushButtonSerialConnect->setText("Connect");
-        }
-        else
-        {
-            ui->pushButtonSerialConnect->setChecked(true);
-            addLog("App >>\t ERROR: Unable to close cennection !", true);
-        }
+
+        emit closeConnection(this, QThread::currentThread());
+        addLog("App >>\t Connection closing...", true);
+        ui->pushButtonSerialConnect->setText("Connect");
+        // if (serial.end(this))  ToDo clean up
+        // {
+        //     addLog("App >>\t Connection closed.", true);
+        //     ui->pushButtonSerialConnect->setText("Connect");
+        // }
+        // else
+        // {
+        //     ui->pushButtonSerialConnect->setChecked(true);
+        //     addLog("App >>\t ERROR: Unable to close cennection !", true);
+        // }
 
         if (!ui->pushButtonSerialConnect->isChecked() && !ui->pushButtonUDPConnect->isChecked())
         {

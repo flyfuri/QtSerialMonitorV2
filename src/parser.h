@@ -40,13 +40,15 @@ public:
     void getCSVReadyData(QStringList *columnNames, QList<QList<double> > *dataColumns);
 signals:
     void updateProgress(float *percent);
+    // void parse(QString inputString, QString externalClockLabel, serial::SERIAL_TSTAMP_MODE tstampmode=serial::NoTStamp,
+    //            int fixinterval = 2, double timebase_s = 0.001);
 public slots:
 private:
     bool abortFlag = false;
     bool canReportProgress = false;
     float parsingProgressPercent = 0.0f;
     int lineCount = 0;
-    serial::SERIAL_TSTAMP_MODE timestampMode = serial::FixIntervalTStamp; //ToDo serial::NoTStamp;
+    serial::SERIAL_TSTAMP_MODE timestampMode = serial::NoTStamp;
     QList<double> dataStorage;
     QList<double> listNumericData;
     QList<long> listTimeStamp;

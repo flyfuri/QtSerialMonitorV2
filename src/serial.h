@@ -6,6 +6,10 @@
 #include <QSerialPortInfo>
 #include <QTime>
 #include <QElapsedTimer>
+#include <QThread>
+#include <QRunnable>
+#include <QEventLoop>
+#include <QDebug>
 
 namespace serial{
 
@@ -25,7 +29,7 @@ enum SERIAL_TSTAMP_MODE
     FixIntervalTStamp,
 };
 
-class Serial : public QObject
+class Serial : public QObject, public QRunnable
 {
     Q_OBJECT
 public:
@@ -33,10 +37,10 @@ public:
     ~Serial();
     bool begin(QString parsedPortName, int parsedBaudRate, int dataBits, int parity, int stopBits, int flowControl, bool dtrOn);
     bool begin(QString parsedPortName, qint32 parsedBaudRate, QString dataBits, QString parity, QString stopBits, QString flowControl, bool dtrOn);
-    bool end();
+    //bool end();
     bool isOpen();
-    bool send(const QByteArray &message);
-    bool send(QString message);
+    //bool send(const QByteArray &message);
+    //bool send(QString message);
     bool setReadMode(int mode);
     bool setTimestampMode(int mode);
     int getAvailiblePortsCount();
@@ -46,10 +50,18 @@ public:
     void clearAll(bool clearHardwareBuffers = false);
     void clearString();
     QList<int> getAvailibleBaudRates();
+    // QRunnable interface
+    void run() Q_DECL_OVERRIDE;
 signals:
+    void dataToParseReady(QString dataToParse);
+    void disconnected(bool successfull);
 
 public slots:
-    void readString();
+    bool send(QString message);
+    bool end(QObject *signalingObject, QThread *threadToMoveTo = nullptr);
+
+private slots:
+    void readString();  //forme readString
 
 private:
     QSerialPort *serialDevice = nullptr;
@@ -64,6 +76,7 @@ private:
     SERIAL_TSTAMP_MODE timestampMode= NoTStamp;
 
     void addTstampString(QString &targetString); //creates timestamp for line depending on mode
+
 
 };
 

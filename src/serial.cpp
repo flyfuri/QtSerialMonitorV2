@@ -1,5 +1,4 @@
 #include "serial.h"
-#include <QDebug>
 
 namespace serial{
 
@@ -10,7 +9,15 @@ Serial::Serial(QObject *parent) : QObject(parent)
 
 Serial::~Serial()
 {
-    end();
+    end(nullptr);
+}
+
+void Serial::run() //from QRunnable
+{
+    QScopedPointer<QEventLoop> serloop(new QEventLoop);
+    connect(this, &serial::Serial::disconnected, serloop.data(), &QEventLoop::quit);
+    qDebug() << "before event loop" << QThread::currentThread();
+    serloop->exec();
 }
 
 void Serial::addTstampString(QString &targetString)
@@ -77,6 +84,12 @@ void Serial::readString()
             }
             break;
         }
+    }
+    int lastNewLine = serialInputString.lastIndexOf("\r\n") + 2;  //ToDo verify its working properly
+    if (lastNewLine > 2)
+    {
+        emit dataToParseReady(serialInputString.sliced(0, lastNewLine));
+        serialInputString.remove(0,lastNewLine);
     }
 }
 
@@ -241,43 +254,43 @@ QList<int> Serial::getAvailibleBaudRates()
     return QSerialPortInfo::standardBaudRates();
 }
 
-bool Serial::begin(QString parsedPortName, int parsedBaudRate, int dataBits, int parity, int stopBits, int flowControl, bool dtrOn)
-{
-    if (QSerialPortInfo::availablePorts().count() < 1)
-    {
-        // this->addLog(">>\t No devices available");
-        return false;
-    }
+// bool Serial::begin(QString parsedPortName, int parsedBaudRate, int dataBits, int parity, int stopBits, int flowControl, bool dtrOn)
+// {
+//     if (QSerialPortInfo::availablePorts().count() < 1)
+//     {
+//         // this->addLog(">>\t No devices available");
+//         return false;
+//     }
 
-    this->serialDevice->setPortName(parsedPortName);
+//     this->serialDevice->setPortName(parsedPortName);
 
-    if (!serialDevice->isOpen())
-    {
-        if (serialDevice->open(QSerialPort::ReadWrite))
-        {
-            this->serialDevice->clear();
-            this->serialDevice->setBaudRate(parsedBaudRate);
-            this->serialDevice->setDataBits((QSerialPort::DataBits)dataBits);
-            this->serialDevice->setParity((QSerialPort::Parity)parity);
-            this->serialDevice->setStopBits((QSerialPort::StopBits)stopBits);
-            this->serialDevice->setFlowControl((QSerialPort::FlowControl)flowControl);
-            this->serialDevice->setDataTerminalReady(dtrOn);
+//     if (!serialDevice->isOpen())
+//     {
+//         if (serialDevice->open(QSerialPort::ReadWrite))
+//         {
+//             this->serialDevice->clear();
+//             this->serialDevice->setBaudRate(parsedBaudRate);
+//             this->serialDevice->setDataBits((QSerialPort::DataBits)dataBits);
+//             this->serialDevice->setParity((QSerialPort::Parity)parity);
+//             this->serialDevice->setStopBits((QSerialPort::StopBits)stopBits);
+//             this->serialDevice->setFlowControl((QSerialPort::FlowControl)flowControl);
+//             this->serialDevice->setDataTerminalReady(dtrOn);
 
-            //  I have identified that the problem is due to the EDBG chip (usb-serial bridge) which requires DTR signal to enable the serial port RXD and TXD pins.
-            //  Including the line of code "serial->setDataTerminalReady(true);" after opening the serial port, the serial port application is now working fine. I guess this is automatically carried out on hyper-terminal software and tera-term software.
-            //  Whether the communication uses the flow control or not,some of the hardware bridge requires the flow control signals to be set for the first time after power ON.
+//             //  I have identified that the problem is due to the EDBG chip (usb-serial bridge) which requires DTR signal to enable the serial port RXD and TXD pins.
+//             //  Including the line of code "serial->setDataTerminalReady(true);" after opening the serial port, the serial port application is now working fine. I guess this is automatically carried out on hyper-terminal software and tera-term software.
+//             //  Whether the communication uses the flow control or not,some of the hardware bridge requires the flow control signals to be set for the first time after power ON.
 
-            connect(this->serialDevice, SIGNAL(readyRead()), this, SLOT(readString()));
+//             connect(this->serialDevice, SIGNAL(readyRead()), this, SLOT(readString()));
 
-            return true;
-        }
-        return false;
-    }
-    else
-    {
-        return false;
-    }
-}
+//             return true;
+//         }
+//         return false;
+//     }
+//     else
+//     {
+//         return false;
+//     }
+// }
 
 bool Serial::begin(QString parsedPortName, qint32 parsedBaudRate, QString dataBits, QString parity, QString stopBits, QString flowControl, bool dtrOn)
 {
@@ -345,16 +358,31 @@ bool Serial::begin(QString parsedPortName, qint32 parsedBaudRate, QString dataBi
     }
 }
 
-bool Serial::end()
+bool Serial::end(QObject *signalingObject, QThread *threadToMoveTo)
 {
     disconnect(serialDevice, SIGNAL(readyRead()), this, SLOT(readString()));
 
     serialDevice->clear();
     serialDevice->close();
+
+    disconnect(nullptr, nullptr, this, SLOT(send(message)));
+    disconnect(nullptr, nullptr, this, SLOT(end()));
+
+    if(threadToMoveTo != nullptr)
+    {
+        moveToThread(threadToMoveTo);
+    }
+    qDebug() << "serial moved back to" << QThread::currentThread();
     if (!this->serialDevice->isOpen())
+    {
+        emit disconnected(true);
         return true;
+    }
     else
+    {
+        emit disconnected(false);
         return false;
+    }
 }
 
 bool Serial::send(QString message)
@@ -370,18 +398,18 @@ bool Serial::send(QString message)
     }
 }
 
-bool Serial::send(const QByteArray &message)
-{
-    if (this->serialDevice->isOpen() && this->serialDevice->isWritable())
-    {
-        this->serialDevice->write(message);
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
+// bool Serial::send(const QByteArray &message)
+// {
+//     if (this->serialDevice->isOpen() && this->serialDevice->isWritable())
+//     {
+//         this->serialDevice->write(message);
+//         return true;
+//     }
+//     else
+//     {
+//         return false;
+//     }
+// }
 
 
 } //end namespace
