@@ -10,6 +10,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     createChart();
     setupTable();
     setupGUI();
+    createParsedDataQueues(parsedDataQueues);
 
     settingsLoadAll();
 
@@ -49,11 +50,22 @@ void MainWindow::createTimers()
     this->serialDeviceCheckTimer = new QTimer(this);
     this->radioButtonTimer = new QTimer(this);
     this->serialStringProcessingTimer = new QTimer(this);
+    this->serialStringProcessingTimer->setSingleShot(true);
     this->udpStringProcessingTimer = new QTimer(this);
 
     connect(serialDeviceCheckTimer, SIGNAL(timeout()), this, SLOT(on_updateSerialDeviceList()));
     connect(radioButtonTimer, &QTimer::timeout, this, [=]()
             { ui->radioButtonDeviceUpdate->setChecked(false); });
+}
+
+void MainWindow::createParsedDataQueues(PARSER::ParsedData &queues)
+{
+    queues.mutex.reset(new QMutex);
+    queues.semaphorGUIprio.reset(new QSemaphore(1));
+    queues.queueLabels.reset(new QQueue<QString>);
+    queues.queueNumericData.reset(new QQueue<double>);
+    queues.queueTimeStamps.reset(new QQueue<long>);
+    queues.strqueuePrefiltered.reset(new QString);
 }
 
 void MainWindow::setupGUI()
@@ -593,9 +605,9 @@ void MainWindow::on_chartBeforeReplotSlot()
 
     if (ui->checkBoxAutoTrack->isChecked() && ui->widgetChart->graphCount() > 0)
     {
-        if (parser.getListTimeStamp().count() > 0)
+        if (timeStampList_lastParsed.count() > 0)
         {
-            ui->widgetChart->xAxis->setRange((parser.getListTimeStamp().last() * chartTimebase) + (ui->spinBoxScrollingTimeRange->value() * 0.05),
+            ui->widgetChart->xAxis->setRange((timeStampList_lastParsed.last() * chartTimebase) + (ui->spinBoxScrollingTimeRange->value() * 0.05),
                                              ui->spinBoxScrollingTimeRange->value(), Qt::AlignRight);  //ToDo review the 0.05 above
         }
 
@@ -1017,48 +1029,78 @@ void MainWindow::processLogWrite(QString rawLine, QStringList labelList, QList<d
     }
 }
 
-void MainWindow::on_processSerial(QString dataToParse)
+void MainWindow::on_processSerial()
 {
-    QString serialInput = dataToParse; /*serial.getString(); //ToDo clean up
-    serial.clearAll();*/
-
-    if (ui->comboBoxTextProcessing->currentIndex() == 1) // Append text to textBrowser
-        serialInput = serialInput.trimmed();
-    else if (ui->comboBoxTextProcessing->currentIndex() == 2)
-        serialInput = serialInput.simplified();
-
-    if (ui->comboBoxFormat->currentIndex() == 0 && serialInput.isEmpty() == false)
+    if (!parsedDataQueues.strqueuePrefiltered->isEmpty())
     {
-        addLog(serialInput, ui->comboBoxAddTextMode->currentIndex());
-    }
-    else if (ui->comboBoxFormat->currentIndex() == 1 && serialInput.length() > 0)
-    {
-        addLogBytes(serialInput.toUtf8(), false, ui->comboBoxAddTextMode->currentIndex());
-    }
-    else if (ui->comboBoxFormat->currentIndex() == 2 && serialInput.length() > 0)
-    {
-        addLogBytes(serialInput.toUtf8(), true, ui->comboBoxAddTextMode->currentIndex());
-    }
+        if(parsedDataQueues.mutex->tryLock(1))
+        {
+            parsedDataQueues.semaphorGUIprio->release(1);
+            //qDebug() << Q_FUNC_INFO << "    dequeue     " << QThread::currentThread();
+            QString serialInput = *parsedDataQueues.strqueuePrefiltered;
+            *parsedDataQueues.strqueuePrefiltered = "";
 
-    if (serialInput.isEmpty() == false)
-    {
-        parser.parse(serialInput, ui->lineEditExternalClockLabel->text(), timestampMode, // Parse string - split into labels + numeric data
-                     ui->spinBoxFixIntervalTime->value(), chartTimebase);
-        QStringList labelList = parser.getStringListLabels();
-        QList<double> numericDataList = parser.getListNumericValues();
-        QList<long> timeStamps = parser.getListTimeStamp();
+            //Now in parser if (ui->comboBoxTextProcessing->currentIndex() == 1) // Append text to textBrowser
+            //     serialInput = serialInput.trimmed();
+            // else if (ui->comboBoxTextProcessing->currentIndex() == 2)
+            //     serialInput = serialInput.simplified();
 
-        this->processChart(labelList, numericDataList, timeStamps);
-        this->processLogWrite(serialInput, labelList, numericDataList, timeStamps);
-        this->saveToRAM(labelList, numericDataList, timeStamps, ui->comboBoxRAMSaveMode->currentIndex(), serialInput);
-        this->processTable(labelList, numericDataList);
-        this->processLogTable(timeStamps, labelList, numericDataList);
+            if (ui->comboBoxFormat->currentIndex() == 0 && serialInput.isEmpty() == false)
+            {
+                addLog(serialInput, ui->comboBoxAddTextMode->currentIndex());
+            }
+            else if (ui->comboBoxFormat->currentIndex() == 1 && serialInput.length() > 0)
+            {
+                addLogBytes(serialInput.toUtf8(), false, ui->comboBoxAddTextMode->currentIndex());
+            }
+            else if (ui->comboBoxFormat->currentIndex() == 2 && serialInput.length() > 0)
+            {
+                addLogBytes(serialInput.toUtf8(), true, ui->comboBoxAddTextMode->currentIndex());
+            }
 
-        //        QFuture<void> future = QtConcurrent::run([=]() // Cool !
-        //        {
+            if (serialInput.isEmpty() == false)
+            {
+                QStringList labelList;
+                QList<double> numericDataList;
+                QList<long> timeStamps;
 
-        //        });
+                while(!parsedDataQueues.queueLabels->empty())
+                {
+                    labelList.append(parsedDataQueues.queueLabels->dequeue());
+                }
+                while(!parsedDataQueues.queueNumericData->empty())
+                {
+                    numericDataList.append(parsedDataQueues.queueNumericData->dequeue());
+                }
+                while(!parsedDataQueues.queueTimeStamps->empty())
+                {
+                    timeStamps.append(parsedDataQueues.queueTimeStamps->dequeue());
+                }
+                parsedDataQueues.mutex->unlock();
+                timeStampList_lastParsed = timeStamps;
+                qDebug() << Q_FUNC_INFO << "first tstamp of batch: " << timeStampList_lastParsed.first();
+                qDebug() << Q_FUNC_INFO << "last tstamp of batch: " << timeStampList_lastParsed.last();
+
+                this->processChart(labelList, numericDataList, timeStamps);
+                this->processLogWrite(serialInput, labelList, numericDataList, timeStamps);
+                this->saveToRAM(labelList, numericDataList, timeStamps, ui->comboBoxRAMSaveMode->currentIndex(), serialInput);
+                this->processTable(labelList, numericDataList);
+                this->processLogTable(timeStamps, labelList, numericDataList);
+            }
+            else
+            {
+                parsedDataQueues.mutex->unlock();
+            }
+        }
+        else
+        {
+            if(parsedDataQueues.queueLabels->count() > 20)
+            {
+                parsedDataQueues.semaphorGUIprio->acquire(1);
+            }
+        }
     }
+    serialStringProcessingTimer->start(ui->spinBoxProcessingDelay->value());
 }
 
 void MainWindow::clearGraphData(bool replot)
@@ -1103,6 +1145,7 @@ void MainWindow::on_processUDP()
         QStringList labelList = parser.getStringListLabels();
         QList<double> numericDataList = parser.getListNumericValues();
         QList<long> timeStamps = parser.getListTimeStamp();
+        timeStampList_lastParsed = timeStamps; //ToDo optimize
 
         this->processLogWrite(udpInput, labelList, numericDataList, timeStamps);
         this->processChart(labelList, numericDataList, timeStamps);
@@ -1650,25 +1693,40 @@ void MainWindow::on_pushButtonSerialConnect_toggled(bool checked)
             if (ui->pushButtonLogging->isChecked() && fileLogger.isOpen() == false) // logger on standby ?
                 fileLogger.beginLog(ui->lineEditSaveLogPath->text(), ui->checkBoxAutoLogging->isChecked(), ui->lineEditSaveFileName->text(), ui->checkBoxTruncateFileOnSave->isChecked());
 
-            //connect(serialStringProcessingTimer, SIGNAL(timeout()), this, SLOT(on_processSerial()));
-            connect(&serial, SIGNAL(dataToParseReady(QString)), this, SLOT(on_processSerial(QString)), Qt::ConnectionType::QueuedConnection);
+            connect(serialStringProcessingTimer, SIGNAL(timeout()), this, SLOT(on_processSerial()));
+            serialStringProcessingTimer->start();
             addLog("App >>\t Serial port opened. " + serial.getSerialInfo() + " DTR: " + QString::number(ui->checkBoxDTR->isChecked()), true);
             ui->pushButtonSerialConnect->setText("Disconnect");
 
-            //move to its own thread while connected
-            QThread *thread = new QThread();
-            thread->setObjectName("serialtask");
+            //create parser and move parser and serial to the newly created threads
+            QThread *serialthread = new QThread();
+            serialthread->setObjectName("serialthread");
+            QThread *parserthread = new QThread();
+            parserthread->setObjectName("parserthread");
+            PARSER::Parser *serialparser = new PARSER::Parser(parsedDataQueues);
+            serialparser->setParseSettings(timestampMode, ui->lineEditExternalClockLabel->text(),ui->spinBoxFixIntervalTime->value(),
+                                           chartTimebase, ui->comboBoxTextProcessing->currentIndex());
 
-            connect(&serial, SIGNAL(dataToParseReady(QString)), this, SLOT(on_processSerial(QString)));
+            //connecting serial
+            connect(&serial, SIGNAL(dataToParseReady(QString)), serialparser, SLOT(parseSlot(QString)), Qt::ConnectionType::QueuedConnection);
             connect(this, SIGNAL(sendString(QString)), &serial, SLOT(send(QString)));
-            connect(thread,&QThread::started,&serial,&serial::Serial::run);
+            connect(serialthread,&QThread::started,&serial,&serial::Serial::run);
             connect(this, SIGNAL(closeConnection(QObject*,QThread*)), &serial, SLOT(end(QObject*,QThread*)));
-            connect(&serial, SIGNAL(disconnected(bool)), thread, SLOT(quit()));
-            connect(thread,&QThread::finished,thread,&QThread::deleteLater);
+            connect(&serial, SIGNAL(disconnected(bool)), serialthread, SLOT(quit()));
+            connect(serialthread,&QThread::finished,serialthread,&QThread::deleteLater);
 
-            qDebug() << "before move to thread" << QThread::currentThread();
-            serial.moveToThread(thread);
-            thread->start(QThread::HighPriority);
+            //connecting parser
+            connect(parserthread,&QThread::started,serialparser,&PARSER::Parser::run);
+            connect(&serial, SIGNAL(disconnected(bool)), serialparser, SLOT(finish()));
+            connect(serialparser, SIGNAL(finished()), serialparser, SLOT(deleteLater()));
+            connect(parserthread,&QThread::finished,parserthread,&QThread::deleteLater);
+
+
+            serial.moveToThread(serialthread);
+            serialthread->start(QThread::HighPriority); //high priority to improve accuracy of system time stamp
+
+            serialparser->moveToThread(parserthread);
+            parserthread->start(QThread::NormalPriority); //ToDo to play with
         }
         else
         {
@@ -1678,10 +1736,11 @@ void MainWindow::on_pushButtonSerialConnect_toggled(bool checked)
     }
     else
     {
-        //serialStringProcessingTimer->stop();
+        serialStringProcessingTimer->stop();
 
-        //disconnect(serialStringProcessingTimer, SIGNAL(timeout()), this, SLOT(on_processSerial())); ToDo
-        disconnect(&serial, SIGNAL(dataToParseReady(QString)), this, SLOT(on_processSerial(QString)));
+        disconnect(this, SIGNAL(sendString(QString)), &serial, SLOT(send(QString)));
+        disconnect(serialStringProcessingTimer, SIGNAL(timeout()), this, SLOT(on_processSerial()));
+        disconnect(&serial, SIGNAL(dataToParseReady(QString)), nullptr, SLOT(nullptr));
 
 
         emit closeConnection(this, QThread::currentThread());
@@ -2115,6 +2174,7 @@ void MainWindow::on_processLoadedFileLine(QString *line, int *progressPercent)
     QStringList labelList = parser.getStringListLabels();
     QList<double> numericDataList = parser.getListNumericValues();
     QList<long> timeStampList = parser.getListTimeStamp();
+    timeStampList_lastParsed = timeStampList; //ToDo optimize
 
     this->processChart(labelList, numericDataList, timeStampList);
     this->processTable(labelList, numericDataList); // Fill tableWidget
@@ -2154,6 +2214,7 @@ void MainWindow::on_processLoadedFile(QString *text)
         QStringList labelList = parser.getStringListLabels();
         QList<double> numericDataList = parser.getListNumericValues();
         QList<long> timeStampList = parser.getListTimeStamp();
+        timeStampList_lastParsed = timeStampList; //ToDo optimize
 
         this->processChart(labelList, numericDataList, timeStampList);
         this->processTable(labelList, numericDataList);

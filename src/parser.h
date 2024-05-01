@@ -8,13 +8,39 @@
 #include <QTimer>
 #include <QApplication>
 #include <QRegularExpression>
+#include <QThread>
+#include <QRunnable>
+#include <QEventLoop>
+#include <QMutex>
+#include <QSemaphore>
+#include <QQueue>
+#include <QDebug>
 #include "serial.h"
 
-class Parser : public QObject
+namespace PARSER{
+
+enum PARSER_PRE_FILTER_MODE
+{
+    None = 0,
+    trimmed,
+    simplified
+};
+
+struct ParsedData{
+    QSharedPointer<QMutex> mutex = nullptr;
+    QSharedPointer<QSemaphore> semaphorGUIprio; //gui signals it needs priority using semaphore(1) as a mutex to use available()...
+    QSharedPointer<QQueue<QString>> queueLabels = nullptr;
+    QSharedPointer<QQueue<double>> queueNumericData = nullptr;
+    QSharedPointer<QQueue<long>> queueTimeStamps = nullptr;
+    QSharedPointer<QString> strqueuePrefiltered = nullptr;        //to pass on inputString prefiltered (simplified, stripped or nothing)
+};
+
+class Parser : public QObject, public QRunnable
 {
     Q_OBJECT
 public:
     explicit Parser(QObject *parent = nullptr);
+    explicit Parser(ParsedData parsedDataPointers, QObject *parent = nullptr);
     QList<double> getDataStorage();
     QList<double> getListNumericValues();
     QList<long> getListTimeStamp();
@@ -38,17 +64,28 @@ public:
     void setParsingTimeRange(QTime minTime, QTime maxTime);
     void setReportProgress(bool isEnabled);
     void getCSVReadyData(QStringList *columnNames, QList<QList<double> > *dataColumns);
+
+    void setParseSettings(int tstampMode=-1, QString extClockLabel="", int fixintv=-1, double tbase_s=-1, int prefltr=-1);
+    void run(); // QRunnable interface
 signals:
     void updateProgress(float *percent);
-    // void parse(QString inputString, QString externalClockLabel, serial::SERIAL_TSTAMP_MODE tstampmode=serial::NoTStamp,
-    //            int fixinterval = 2, double timebase_s = 0.001);
+    void finished();
 public slots:
+    void parseSlot(QString inputString);
+    void finish();
 private:
     bool abortFlag = false;
     bool canReportProgress = false;
     float parsingProgressPercent = 0.0f;
     int lineCount = 0;
-    serial::SERIAL_TSTAMP_MODE timestampMode = serial::NoTStamp;
+    struct ParsSettings{
+        serial::SERIAL_TSTAMP_MODE timestampMode = serial::NoTStamp;
+        QString externalClockLabel;
+        int fixinterval;
+        double timebase_s;
+        PARSER_PRE_FILTER_MODE prefilterMode = None;
+    } parsSettings;
+    ParsedData parseddata;
     QList<double> dataStorage;
     QList<double> listNumericData;
     QList<long> listTimeStamp;
@@ -61,6 +98,9 @@ private:
     QTime latestTimeStamp_Time;
     int latestTimeStamp_ms;
     QTime minimumTime, maximumTime;
+    QMutex mutex;
 };
+
+} //end namespace
 
 #endif // PARSER_H

@@ -116,7 +116,7 @@ private slots:
     void on_printIntroChangelog();
     void on_printLog(QPrinter *printer);
     void on_printPlot(QPrinter *printer);
-    void on_processSerial(QString dataToParse);
+    void on_processSerial();
     void on_processUDP();
     void on_pushButtonAddDateTime_clicked();
     void on_pushButtonClear_clicked();
@@ -166,7 +166,7 @@ private:
     InfoDialog infoDialog;
     Logger fileLogger;
     NetworkUDP networkUDP;
-    Parser parser;
+    PARSER::Parser parser;
     QCPItemTracer *phaseTracer;
     QList<int> missingCount;
     QString controlCharactersVisibleConvert(QString text);
@@ -178,6 +178,8 @@ private:
     serial::Serial serial;
     Ui::MainWindow *ui;
     serial::SERIAL_TSTAMP_MODE timestampMode;
+    PARSER::ParsedData parsedDataQueues;  //queues where all parsers add their results to be drawn on the GUI elements
+    QList<long> timeStampList_lastParsed;
     double chartTimebase = 1e3; //usually 1e3 for ms or 1e6 for micros
     void addLog(QString text, bool appendAsLine = false);
     void addLogBytes(QByteArray bytes, bool hexToBinary = false, bool appendAsLine = false);
@@ -187,6 +189,7 @@ private:
     void createChart();
     void createChartTracer();
     void createTimers();
+    void createParsedDataQueues(PARSER::ParsedData &queues);
     void exportArraysToCSV(QStringList labelList, QList<QList<double>> dataColums, QChar sep = ',');
     void exportTableLogToCSV(QTableView *table, QChar sep = ',');
     void loadFromRAM(bool loadText);

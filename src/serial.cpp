@@ -16,7 +16,6 @@ void Serial::run() //from QRunnable
 {
     QScopedPointer<QEventLoop> serloop(new QEventLoop);
     connect(this, &serial::Serial::disconnected, serloop.data(), &QEventLoop::quit);
-    qDebug() << "before event loop" << QThread::currentThread();
     serloop->exec();
 }
 
@@ -86,11 +85,14 @@ void Serial::readString()
         }
     }
     int lastNewLine = serialInputString.lastIndexOf("\r\n") + 2;  //ToDo verify its working properly
+    //qDebug() << Q_FUNC_INFO << lastNewLine << "/" << serialInputString.size();
     if (lastNewLine > 2)
     {
         emit dataToParseReady(serialInputString.sliced(0, lastNewLine));
+        //qDebug() << Q_FUNC_INFO << "sent to parser" << QThread::currentThread() << lastNewLine;
         serialInputString.remove(0,lastNewLine);
-    }
+    }  
+    //qDebug() << Q_FUNC_INFO << serialInputString;
 }
 
 bool Serial::setReadMode(int mode)
@@ -365,14 +367,11 @@ bool Serial::end(QObject *signalingObject, QThread *threadToMoveTo)
     serialDevice->clear();
     serialDevice->close();
 
-    disconnect(nullptr, nullptr, this, SLOT(send(message)));
-    disconnect(nullptr, nullptr, this, SLOT(end()));
-
     if(threadToMoveTo != nullptr)
     {
         moveToThread(threadToMoveTo);
     }
-    qDebug() << "serial moved back to" << QThread::currentThread();
+    //qDebug() << "serial moved back to" << QThread::currentThread();
     if (!this->serialDevice->isOpen())
     {
         emit disconnected(true);
