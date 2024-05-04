@@ -161,6 +161,8 @@ private slots:
     void on_comboBoxBaudRates_currentIndexChanged(int index);
     void on_comboBoxExternalTimeFormat_currentIndexChanged(int index);
 
+    void on_spinBoxScrollingTimeRange_valueChanged(int arg1);
+
 private:
     // QCompleter *completer;
     FileReader fileReader;
@@ -182,7 +184,10 @@ private:
     serial::SERIAL_TSTAMP_MODE timestampMode;
     PARSER::ParsedData parsedDataQueues;  //queues where all parsers add their results to be drawn on the GUI elements
     QList<long> timeStampList_lastParsed;
+    //settings
+    double autoScrollTimeRange;
     double chartTimebase = 1e3; //usually 1e3 for ms or 1e6 for micros
+    //functions
     void addLog(QString text, bool appendAsLine = false);
     void addLogBytes(QByteArray bytes, bool hexToBinary = false, bool appendAsLine = false);
     void chartPrintPreview();

@@ -160,7 +160,7 @@ void MainWindow::createChart()
     ui->widgetChart->legend->setIconSize(15, 10);
     ui->widgetChart->legend->setSelectableParts(QCPLegend::SelectablePart::spItems); // legend box shall not be selectable, only legend items
     ui->widgetChart->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
-    ui->widgetChart->xAxis->setRange(-1.0, ui->spinBoxScrollingTimeRange->value());
+    ui->widgetChart->xAxis->setRange(autoScrollTimeRange * (-0.1), autoScrollTimeRange); //if change here, do also in on_pushButtonClearAll_clicked()
     ui->widgetChart->yAxis->setRange(-1.0, 1.0);
 
     connect(ui->widgetChart, SIGNAL(mouseDoubleClick(QMouseEvent *)), this, SLOT(on_chartMouseDoubleClickHandler(QMouseEvent *)));
@@ -609,8 +609,8 @@ void MainWindow::on_chartBeforeReplotSlot()
     {
         if (timeStampList_lastParsed.count() > 0)
         {
-            ui->widgetChart->xAxis->setRange((timeStampList_lastParsed.last() * chartTimebase) + (ui->spinBoxScrollingTimeRange->value() * 0.05),
-                                             ui->spinBoxScrollingTimeRange->value(), Qt::AlignRight);  //ToDo review the 0.05 above
+            ui->widgetChart->xAxis->setRange((timeStampList_lastParsed.last() * chartTimebase) + (autoScrollTimeRange * 0.05),
+                                             autoScrollTimeRange, Qt::AlignRight);  //ToDo review the 0.05 above
         }
 
         if (ui->checkBoxAutoRescaleY->isChecked())
@@ -1666,7 +1666,7 @@ void MainWindow::createChartTracer()
 
 void MainWindow::on_pushButtonClearAll_clicked()
 {
-    ui->widgetChart->xAxis->setRange(-1.0, ui->spinBoxScrollingTimeRange->value());
+    ui->widgetChart->xAxis->setRange(autoScrollTimeRange * (-0.1), autoScrollTimeRange); //if change here, do also in createChart()
     ui->widgetChart->yAxis->setRange(-1.0, 1.0);
 
     parser.restartChartTimer();
@@ -2837,5 +2837,27 @@ void MainWindow::on_comboBoxExternalTimeFormat_currentIndexChanged(int index)
         chartTimebase = 1; //second
         ui->spinBoxFixIntervalTime->setRange(1,3600);
     }
+}
+
+
+void MainWindow::on_spinBoxScrollingTimeRange_valueChanged(int arg1)
+{
+    if(arg1 < 1000)
+    {
+        if(arg1 == 100 && ui->spinBoxScrollingTimeRange->singleStep() == 1000)
+        {
+            ui->spinBoxScrollingTimeRange->setValue(900);
+        }
+        ui->spinBoxScrollingTimeRange->setSingleStep(100);
+    }
+    else if(arg1 > 1000)
+    {
+        if(arg1 == 1100 && ui->spinBoxScrollingTimeRange->singleStep() == 100)
+        {
+            ui->spinBoxScrollingTimeRange->setValue(2000);
+        }
+        ui->spinBoxScrollingTimeRange->setSingleStep(1000);
+    }
+    autoScrollTimeRange = qMin(double(arg1) / 1000.0, 0.1);
 }
 
