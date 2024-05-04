@@ -16,6 +16,10 @@
 #include <QQueue>
 #include <QDebug>
 #include "serial.h"
+#include "qcustomplot.h"
+
+#define MS_PER_DAY 86400000l
+
 
 namespace PARSER{
 
@@ -65,6 +69,7 @@ public:
     void setReportProgress(bool isEnabled);
     void getCSVReadyData(QStringList *columnNames, QList<QList<double> > *dataColumns);
 
+    static long timeTomsSinceBeginOfDay(QTime);
     void setParseSettings(int tstampMode=-1, QString extClockLabel="", int fixintv=-1, double tbase_s=-1, int prefltr=-1);
     void run(); // QRunnable interface
 signals:
@@ -95,8 +100,7 @@ private:
     QStringList textStorage;
     QElapsedTimer parserTimer;
     QTime parserClock;
-    QTime latestTimeStamp_Time;
-    int latestTimeStamp_ms;
+    long latestTimeStamp_ms;
     QTime minimumTime, maximumTime;
     QMutex mutex;
 };

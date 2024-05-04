@@ -7,7 +7,7 @@ Parser::Parser(QObject *parent) : QObject(parent)
     //ToDo why originally on the heap? parserTimer = new QElapsedTimer;
     //ToDo why originally on the heap?  parserClock = new QTime;
     parserTimer.start();
-    latestTimeStamp_Time.setHMS(0, 0, 0, 0);
+    latestTimeStamp_ms = 0; //setHMS(0, 0, 0, 0);
 }
 
 Parser::Parser(ParsedData parsedDataPointers, QObject *parent)
@@ -18,7 +18,7 @@ Parser::Parser(ParsedData parsedDataPointers, QObject *parent)
         parseddata = parsedDataPointers;
     }
     parserTimer.start();
-    latestTimeStamp_Time.setHMS(0, 0, 0, 0);
+    latestTimeStamp_ms = 0; //setHMS(0, 0, 0, 0);
 }
 
 
@@ -63,15 +63,16 @@ void Parser::parseSlot(QString inputString)
         QStringList inputStringSplitArray = inputStringSplitArrayLines[l].simplified().split(QRegularExpression("\\s+"), Qt::SplitBehaviorFlags::SkipEmptyParts); // rozdzielamy traktująac spacje jako separator
 
         if (parsSettings.timestampMode == serial::SysTimeStamp && inputStringSplitArray.last().contains("RDTSTAMP")){
-            QTime tmpTime = latestTimeStamp_Time.fromMSecsSinceStartOfDay(
-                inputStringSplitArray.last().replace("RDTSTAMP", "").toInt());
+            long tmpms = inputStringSplitArray.last().replace("RDTSTAMP", "").toInt();
+            QTime tmpTime = QTime::fromMSecsSinceStartOfDay(tmpms);
             if(tmpTime.isValid())
             {
-                latestTimeStamp_Time = tmpTime;
+                latestTimeStamp_ms = tmpms;
             }
             else
             {
-                latestTimeStamp_Time = latestTimeStamp_Time.addMSecs(parsSettings.fixinterval); //ToDo find out whats best when timestamp tag not present..
+                latestTimeStamp_ms += parsSettings.fixinterval; //ToDo find out whats best when timestamp tag not present..
+                if(latestTimeStamp_ms > MS_PER_DAY){latestTimeStamp_ms -= MS_PER_DAY;}//ToDo micros
             }
             inputStringSplitArray.removeLast();
         }
@@ -80,9 +81,10 @@ void Parser::parseSlot(QString inputString)
             // Find external time...
             if (parsSettings.timestampMode == serial::ExternalTStamp)  //ToDo time format as intervals...
             {
-                if (parsSettings.externalClockLabel.isEmpty() == false && inputStringSplitArray[i] == parsSettings.externalClockLabel)
+                if (parsSettings.externalClockLabel.isEmpty() == false && inputStringSplitArray[i] == parsSettings.externalClockLabel
+                    && (QTime::fromMSecsSinceStartOfDay((inputStringSplitArray[i + 1]).toInt()).isValid()))
                 {
-                    latestTimeStamp_Time = QTime::fromMSecsSinceStartOfDay(inputStringSplitArray[i + 1].toInt());
+                    latestTimeStamp_ms = inputStringSplitArray[i + 1].toInt();
                 }
                 else if (parsSettings.externalClockLabel.isEmpty() == true)
                 {
@@ -90,7 +92,7 @@ void Parser::parseSlot(QString inputString)
                     {
                         if (QTime::fromString(inputStringSplitArray[i], timeFormat).isValid())
                         {
-                            latestTimeStamp_Time = QTime::fromString(inputStringSplitArray[i], timeFormat);
+                            latestTimeStamp_ms = this->timeTomsSinceBeginOfDay(QTime::fromString(inputStringSplitArray[i], timeFormat));
                             break;
                         }
                     }
@@ -215,16 +217,17 @@ void Parser::parse(QString inputString, QString externalClockLabel, serial::SERI
         inputStringSplitArrayLines[l].replace(sepSymbols, " ");
         QStringList inputStringSplitArray = inputStringSplitArrayLines[l].simplified().split(QRegularExpression("\\s+"), Qt::SplitBehaviorFlags::SkipEmptyParts); // rozdzielamy traktująac spacje jako separator
 
-        if (tstampmode == serial::SysTimeStamp && inputStringSplitArray.last().contains("RDTSTAMP")){
-            QTime tmpTime = latestTimeStamp_Time.fromMSecsSinceStartOfDay(
-                inputStringSplitArray.last().replace("RDTSTAMP", "").toInt());
+        if (parsSettings.timestampMode == serial::SysTimeStamp && inputStringSplitArray.last().contains("RDTSTAMP")){
+            long tmpms = inputStringSplitArray.last().replace("RDTSTAMP", "").toInt();
+            QTime tmpTime = QTime::fromMSecsSinceStartOfDay(tmpms);
             if(tmpTime.isValid())
             {
-                latestTimeStamp_Time = tmpTime;
+                latestTimeStamp_ms = tmpms;
             }
             else
             {
-                latestTimeStamp_Time = latestTimeStamp_Time.addMSecs(fixinterval); //ToDo find out whats best when timestamp tag not present..
+                latestTimeStamp_ms += parsSettings.fixinterval; //ToDo find out whats best when timestamp tag not present..
+                if(latestTimeStamp_ms > MS_PER_DAY){latestTimeStamp_ms -= MS_PER_DAY;}//ToDo micros
             }
             inputStringSplitArray.removeLast();
         }
@@ -233,9 +236,10 @@ void Parser::parse(QString inputString, QString externalClockLabel, serial::SERI
             // Find external time...
             if (tstampmode == serial::ExternalTStamp)  //ToDo time format as intervals...
             {
-                if (externalClockLabel.isEmpty() == false && inputStringSplitArray[i] == externalClockLabel)
+                if (externalClockLabel.isEmpty() == false && inputStringSplitArray[i] == externalClockLabel
+                    && (QTime::fromMSecsSinceStartOfDay((inputStringSplitArray[i + 1]).toInt()).isValid()))
                 {
-                    latestTimeStamp_Time = QTime::fromMSecsSinceStartOfDay(inputStringSplitArray[i + 1].toInt());
+                    latestTimeStamp_ms = inputStringSplitArray[i + 1].toInt();
                 }
                 else if (externalClockLabel.isEmpty() == true)
                 {
@@ -243,14 +247,15 @@ void Parser::parse(QString inputString, QString externalClockLabel, serial::SERI
                     {
                         if (QTime::fromString(inputStringSplitArray[i], timeFormat).isValid())
                         {
-                            latestTimeStamp_Time = QTime::fromString(inputStringSplitArray[i], timeFormat);
+                            latestTimeStamp_ms = this->timeTomsSinceBeginOfDay(QTime::fromString(inputStringSplitArray[i], timeFormat));
                             break;
                         }
                     }
 
                     if (minimumTime != QTime(0, 0, 0) && maximumTime != QTime(0, 0, 0))
                     {
-                        if (latestTimeStamp_Time < minimumTime || latestTimeStamp_Time > maximumTime)
+                        if (QTime::fromMSecsSinceStartOfDay(latestTimeStamp_ms) < minimumTime
+                            || QTime::fromMSecsSinceStartOfDay(latestTimeStamp_ms) > maximumTime)
                         {
                             continue;
                         }
@@ -281,16 +286,17 @@ void Parser::parse(QString inputString, QString externalClockLabel, serial::SERI
 
             if (tstampmode == serial::ExternalTStamp)
             {
-                listTimeStamp.append(latestTimeStamp_Time.msecsSinceStartOfDay());
+                listTimeStamp.append(latestTimeStamp_ms);
             }
             else if (tstampmode == serial::SysTimeStamp)
             {
-               listTimeStamp.append(latestTimeStamp_Time.msecsSinceStartOfDay()); // old listTimeStamp.append(parserClock.currentTime().msecsSinceStartOfDay());
+               listTimeStamp.append(latestTimeStamp_ms); // old listTimeStamp.append(parserClock.currentTime().msecsSinceStartOfDay());
             }
             else if (tstampmode == serial::FixIntervalTStamp)
             {
-                latestTimeStamp_Time = latestTimeStamp_Time.addMSecs(fixinterval); //ToDo micros
-                listTimeStamp.append(latestTimeStamp_Time.msecsSinceStartOfDay());
+                latestTimeStamp_ms += parsSettings.fixinterval;
+                if(latestTimeStamp_ms > MS_PER_DAY){latestTimeStamp_ms -= MS_PER_DAY;}//ToDo micros
+                listTimeStamp.append(latestTimeStamp_ms);
             }
             else //tstampmode == serial::NoTStamp
             {
@@ -356,9 +362,9 @@ void Parser::parseCSV(QString inputString, bool useExternalLabel, QString extern
             {
                 qDebug() << "inputStringSplitArray: " + QString::number(inputStringSplitArray[i].toFloat());
 
-                latestTimeStamp_Time = QTime::fromMSecsSinceStartOfDay((int)inputStringSplitArray[i].toFloat());
+                latestTimeStamp_ms = inputStringSplitArray[i].toLong();
                 qDebug() << "TIME: " + QString::number(inputStringSplitArray[i].toFloat());
-                qDebug() << "latestTimeStamp: " + latestTimeStamp_Time.toString();
+                qDebug() << "latestTimeStamp: " << latestTimeStamp_ms;
                 break;
             }
             else if (useExternalLabel == false)
@@ -367,11 +373,12 @@ void Parser::parseCSV(QString inputString, bool useExternalLabel, QString extern
                 {
                     if (QTime::fromString(inputStringSplitArray[i], timeFormat).isValid())
                     {
-                        latestTimeStamp_Time = QTime::fromString(inputStringSplitArray[i], timeFormat);
+                        latestTimeStamp_ms = this->timeTomsSinceBeginOfDay(QTime::fromString(inputStringSplitArray[i], timeFormat));
 
                         if (minimumTime != QTime(0, 0, 0) && maximumTime != QTime(0, 0, 0))
                         {
-                            if (latestTimeStamp_Time < minimumTime || latestTimeStamp_Time > maximumTime)
+                            if (QTime::fromMSecsSinceStartOfDay(latestTimeStamp_ms) < minimumTime
+                                || QTime::fromMSecsSinceStartOfDay(latestTimeStamp_ms) > maximumTime)
                             {
                                 continue;
                             }
@@ -392,7 +399,7 @@ void Parser::parseCSV(QString inputString, bool useExternalLabel, QString extern
                     continue; // TODO ERROR REPORTING
                 stringListLabels.append(csvLabels[i]);
                 listNumericData.append(inputStringSplitArray[i].toDouble());
-                listTimeStamp.append(latestTimeStamp_Time.msecsSinceStartOfDay());
+                listTimeStamp.append(latestTimeStamp_ms);
             }
         }
     }
@@ -419,6 +426,11 @@ void Parser::getCSVReadyData(QStringList *columnNames, QList<QList<double>> *dat
 
     *columnNames = tempColumnNames;
     *dataColumns = tempColumnsData;
+}
+
+long Parser::timeTomsSinceBeginOfDay(QTime time)
+{
+    return MS_PER_DAY - long(time.msecsTo(QTime(0,0,0,0)));
 }
 
 void Parser::setParseSettings(int tstampMode, QString extClockLabel, int fixintv, double tbase_s, int prefltr)
@@ -454,7 +466,7 @@ QStringList Parser::getLabelStorage() { return labelStorage; }
 QStringList Parser::getStringListLabels() { return stringListLabels; }
 QStringList Parser::getStringListNumericData() { return stringListNumericData; }
 QStringList Parser::getTextList() { return textStorage; }
-void Parser::clearExternalClock() { latestTimeStamp_Time.setHMS(0, 0, 0, 0); }
+void Parser::clearExternalClock() { latestTimeStamp_ms = 0;} //.setHMS(0, 0, 0, 0);
 
 void Parser::restartChartTimer()
 {
