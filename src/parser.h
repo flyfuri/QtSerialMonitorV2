@@ -36,7 +36,9 @@ struct ParsedData{
     QSharedPointer<QQueue<QString>> queueLabels = nullptr;
     QSharedPointer<QQueue<double>> queueNumericData = nullptr;
     QSharedPointer<QQueue<long>> queueTimeStamps = nullptr;
-    QSharedPointer<QString> strqueuePrefiltered = nullptr;        //to pass on inputString prefiltered (simplified, stripped or nothing)
+    QSharedPointer<QString> strqueuePrefiltered = nullptr; //to pass on inputString prefiltered (simplified, stripped or nothing)
+    QSharedPointer<QQueue<QString>> queueChartGraphLabels = nullptr;
+    QSharedPointer<QQueue<QSharedPointer<QVector<QCPGraphData>>>> queueChartGraphs= nullptr;
 };
 
 class Parser : public QObject, public QRunnable

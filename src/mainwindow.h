@@ -35,6 +35,8 @@
 #include <QTimer>
 #include <QScopedPointer>
 
+#include "qcustomplot.h"
+
 namespace Ui
 {
     class MainWindow;
@@ -195,6 +197,7 @@ private:
     void loadFromRAM(bool loadText);
     void menageAutoCompleteList(QString input);
     void processChart(QStringList labelList, QList<double> numericDataList, QList<long> timeStampsList);
+    void processChart(QStringList &graphLabels, QList<QSharedPointer<QVector<QCPGraphData>>> &graphDataVectors);
     void processLogTable(QList<long> timeTable, QStringList labelTable, QList<double> valueTable);
     void processLogWrite(QString rawLine, QStringList labelList, QList<double> dataList, QList<long> timeList);
     void processTable(QStringList labels, QList<double> values);

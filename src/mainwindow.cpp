@@ -66,6 +66,8 @@ void MainWindow::createParsedDataQueues(PARSER::ParsedData &queues)
     queues.queueNumericData.reset(new QQueue<double>);
     queues.queueTimeStamps.reset(new QQueue<long>);
     queues.strqueuePrefiltered.reset(new QString);
+    queues.queueChartGraphLabels.reset(new QQueue<QString>);
+    queues.queueChartGraphs.reset(new QQueue<QSharedPointer<QVector<QCPGraphData>>>);
 }
 
 void MainWindow::setupGUI()
@@ -1060,10 +1062,10 @@ void MainWindow::on_processSerial()
 
             if (serialInput.isEmpty() == false)
             {
+                //old style
                 QStringList labelList;
                 QList<double> numericDataList;
                 QList<long> timeStamps;
-
                 while(!parsedDataQueues.queueLabels->empty())
                 {
                     labelList.append(parsedDataQueues.queueLabels->dequeue());
@@ -1076,12 +1078,27 @@ void MainWindow::on_processSerial()
                 {
                     timeStamps.append(parsedDataQueues.queueTimeStamps->dequeue());
                 }
+                while(!parsedDataQueues.queueTimeStamps->empty())
+                {
+                    timeStamps.append(parsedDataQueues.queueTimeStamps->dequeue());
+                }
+                //new style
+                QStringList graphLabels;
+                QList<QSharedPointer<QVector<QCPGraphData>>> graphDataVectors;
+                while(!parsedDataQueues.queueChartGraphLabels->empty())
+                {
+                    graphLabels.append(parsedDataQueues.queueChartGraphLabels->dequeue());
+                }
+                while(!parsedDataQueues.queueChartGraphs->empty())
+                {
+                    graphDataVectors.append(parsedDataQueues.queueChartGraphs->dequeue());
+                }
+                this->processChart(graphLabels, graphDataVectors);
+
                 parsedDataQueues.mutex->unlock();
                 timeStampList_lastParsed = timeStamps;
-                qDebug() << Q_FUNC_INFO << "first tstamp of batch: " << timeStampList_lastParsed.first();
-                qDebug() << Q_FUNC_INFO << "last tstamp of batch: " << timeStampList_lastParsed.last();
 
-                this->processChart(labelList, numericDataList, timeStamps);
+                //old style this->processChart(labelList, numericDataList, timeStamps);
                 this->processLogWrite(serialInput, labelList, numericDataList, timeStamps);
                 this->saveToRAM(labelList, numericDataList, timeStamps, ui->comboBoxRAMSaveMode->currentIndex(), serialInput);
                 this->processTable(labelList, numericDataList);
@@ -1192,6 +1209,7 @@ void MainWindow::sendUDPDatagram(QString message)
     // addLog("UDP >>\t" + message);
 }
 
+//old style
 void MainWindow::processChart(QStringList labelList, QList<double> numericDataList, QList<long> timeStampsList)
 {
     if (timeStampsList.count() == 0 || labelList.count() == 0 || numericDataList.count() == 0 || ui->pushButtonEnablePlot->isChecked())
@@ -1275,6 +1293,118 @@ void MainWindow::processChart(QStringList labelList, QList<double> numericDataLi
         }
     }
 
+    ui->widgetChart->replot();
+}
+
+//new style
+void MainWindow::processChart(QStringList &graphLabels, QList<QSharedPointer<QVector<QCPGraphData>>> &graphDataVectors)
+{
+    if(graphLabels.empty() || graphDataVectors.empty() || ui->pushButtonEnablePlot->isChecked())
+    {
+        return;
+    }
+
+    foreach (auto label, graphLabels)
+    {
+        bool canAddGraph = true;
+        if (ui->widgetChart->graphCount() > 0)
+        {
+            for (auto i = 0; i < ui->widgetChart->graphCount(); ++i)
+            {
+                if (ui->widgetChart->graph(i)->name() == label)
+                {
+                    canAddGraph = false;
+                    break;
+                }
+            }
+        }
+
+        if (canAddGraph && ui->widgetChart->graphCount() < ui->spinBoxMaxGraphs->value() &&
+
+        ((ui->comboBoxGraphDisplayMode->currentIndex() == 0) ||
+
+        (ui->comboBoxGraphDisplayMode->currentIndex() == 1 &&
+        ui->lineEditCustomParsingRules->text().simplified().contains(label, Qt::CaseSensitivity::CaseSensitive)) ||
+
+        (ui->comboBoxGraphDisplayMode->currentIndex() == 2 &&
+        !ui->lineEditCustomParsingRules->text().simplified().contains(label, Qt::CaseSensitivity::CaseSensitive))))
+        {
+            ui->widgetChart->addGraph();
+            ui->widgetChart->graph()->setName(label);
+
+            ui->widgetChart->graph()->selectionDecorator()->setPen(QPen(Qt::black, 1.0, Qt::PenStyle::DashLine));
+            while (ui->widgetChart->graph()->lineStyle() == (QCPGraph::LineStyle::lsImpulse))  //
+                ui->widgetChart->graph()->setLineStyle((QCPGraph::LineStyle)(rand() % 5 + 1)); // random line except for impulse
+            while (ui->widgetChart->graph()->scatterStyle().shape() == QCPScatterStyle::ScatterShape::ssNone)
+                ui->widgetChart->graph()->setScatterStyle(QCPScatterStyle((QCPScatterStyle::ScatterShape)(rand() % 14 + 1))); // random scatter
+
+            int hue = 0; // start with red
+            for (auto i = 0; i < ui->widgetChart->graphCount(); ++i)
+            {
+                ui->widgetChart->graph(i)->setPen(QPen(QColor::fromHsv(hue, 255, 200))); // random color
+                hue += 360 / ui->widgetChart->graphCount();
+            }
+
+            //ToDo still needed? missingCount.append(0); // Add missing counter to the list (corresponds to each graph index)
+        }
+    }
+
+    if(graphLabels.count() > graphDataVectors.count())
+    {
+        qDebug() << Q_FUNC_INFO << " unequal queue length for graph data (labelq > dataq)";
+    }
+    else if(graphLabels.count() < graphDataVectors.count())
+    {
+        qDebug() << Q_FUNC_INFO << " unequal queue length for graph data (labelq < dataq)";
+    }
+
+    QStringList actualGraphNames;
+    for (auto i = 0; i < ui->widgetChart->graphCount(); ++i)
+    {
+        actualGraphNames.append(ui->widgetChart->graph(i)->name());
+    }
+
+    double tstampForDel = 0;
+    QStringList::iterator iter_label = graphLabels.begin();
+    const QStringList::iterator iter_label_end = graphLabels.end();
+    //qDebug() << graphLabels.count() << "/" << graphLabels.count();
+    foreach(auto graphDataVector, graphDataVectors) //QSharedPointer<QVector<QCPGraphData>>
+    {
+        int tmpGraphIndex = 0;
+        if(iter_label != iter_label_end)
+        {
+            tmpGraphIndex = actualGraphNames.indexOf(*iter_label);
+            if(tmpGraphIndex > -1)
+            {
+                QSharedPointer<QCPGraphDataContainer> tmpgraphcontainer = ui->widgetChart->graph(tmpGraphIndex)->data();
+                tmpgraphcontainer->add(*graphDataVector, true);
+                qDebug() << graphDataVector->count();
+
+                // foreach(QCPGraphData record, *graphDataVector)
+                // {
+                //     qDebug() << *iter_label << ": " << record.key << "/ " << record.value;
+                // }
+
+                double lastTstamp = (graphDataVector->last().key);
+                if(lastTstamp > tstampForDel)
+                {
+                    tstampForDel = lastTstamp;
+                }
+            }
+        }
+        iter_label++;
+    }
+    if (ui->spinBoxMaxTimeRange->value() > 0)
+    {
+        tstampForDel -= ui->spinBoxMaxTimeRange->value();
+        if(tstampForDel > 0)
+        {
+            for (auto i = 0; i < ui->widgetChart->graphCount(); ++i)
+            {
+                ui->widgetChart->graph(i)->data().data()->removeBefore(tstampForDel); // Remove old points
+            }
+        }
+    }
     ui->widgetChart->replot();
 }
 

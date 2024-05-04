@@ -31,11 +31,15 @@ void Parser::run()
 
 void Parser::parseSlot(QString inputString)
 {
-
+    //old style
     listNumericData.clear();
     stringListLabels.clear();
     listTimeStamp.clear();
     lineCount = 0;
+
+    //new style
+    QList<QString> graphLabels;  // list with unique graph labels
+    QList<QSharedPointer<QVector<QCPGraphData>>> chartGraphsData;  //list data for all graphs in a form it can diectly be added to chart.
 
     QStringList inputStringSplitArrayLines = inputString.split(QRegularExpression("[\\n+\\r+]"), Qt::SplitBehaviorFlags::SkipEmptyParts);
     lineCount = inputStringSplitArrayLines.count();
@@ -76,10 +80,9 @@ void Parser::parseSlot(QString inputString)
             }
             inputStringSplitArray.removeLast();
         }
-        for (auto i = 0; i < inputStringSplitArray.count(); ++i)
+        else if (parsSettings.timestampMode == serial::ExternalTStamp)  //ToDo time format as intervals...
         {
-            // Find external time...
-            if (parsSettings.timestampMode == serial::ExternalTStamp)  //ToDo time format as intervals...
+            for (auto i = 0; i < inputStringSplitArray.count(); ++i)
             {
                 if (parsSettings.externalClockLabel.isEmpty() == false && inputStringSplitArray[i] == parsSettings.externalClockLabel
                     && (QTime::fromMSecsSinceStartOfDay((inputStringSplitArray[i + 1]).toInt()).isValid()))
@@ -97,12 +100,33 @@ void Parser::parseSlot(QString inputString)
                         }
                     }
 
-                    if (minimumTime != QTime(0, 0, 0) && maximumTime != QTime(0, 0, 0))
+
+                }
+            }
+
+        }
+        else if (parsSettings.timestampMode == serial::FixIntervalTStamp)
+        {
+            latestTimeStamp_ms += parsSettings.fixinterval;
+            if(latestTimeStamp_ms > MS_PER_DAY){latestTimeStamp_ms -= MS_PER_DAY;}//ToDo micros
+        }
+        else //tstampmode == serial::NoTStamp
+        {
+            listTimeStamp.append(parserTimer.elapsed());
+        }
+
+
+
+        for (auto i = 0; i < inputStringSplitArray.count(); ++i)
+        {
+            if (parsSettings.timestampMode == serial::ExternalTStamp)
+            {
+                if (minimumTime != QTime(0, 0, 0) && maximumTime != QTime(0, 0, 0))
+                {
+                    if (QTime::fromMSecsSinceStartOfDay(latestTimeStamp_ms) < minimumTime
+                        || QTime::fromMSecsSinceStartOfDay(latestTimeStamp_ms) > maximumTime)
                     {
-                        if (latestTimeStamp_Time < minimumTime || latestTimeStamp_Time > maximumTime)
-                        {
-                            continue;
-                        }
+                        continue;
                     }
                 }
             }
@@ -110,16 +134,19 @@ void Parser::parseSlot(QString inputString)
             // Labels +
             if (i == 0 && mainSymbols.match(inputStringSplitArray[0]).hasMatch())
             {
+                //old style
                 listNumericData.append(inputStringSplitArray[i].toDouble());
                 stringListLabels.append("Graph 0");
             }
             else if (i > 0 && mainSymbols.match(inputStringSplitArray[i]).hasMatch() && mainSymbols.match(inputStringSplitArray[i - 1]).hasMatch())
             {
+                //old style
                 listNumericData.append(inputStringSplitArray[i].toDouble());
                 stringListLabels.append("Graph " + QString::number(i));
             }
             else if (i > 0 && mainSymbols.match(inputStringSplitArray[i]).hasMatch() && !mainSymbols.match(inputStringSplitArray[i - 1]).hasMatch())
             {
+                //old style
                 listNumericData.append(inputStringSplitArray[i].toDouble());
                 stringListLabels.append(inputStringSplitArray[i - 1]);
             }
@@ -128,22 +155,24 @@ void Parser::parseSlot(QString inputString)
                 continue; // We didnt find or add any new data points so lets not log time and skip to the next element on the list...
             }
 
-            if (parsSettings.timestampMode == serial::ExternalTStamp)
+            //old style
+            listTimeStamp.append(latestTimeStamp_ms);
+            //new style
+            QString tmplabel = stringListLabels.last();
+            QCPGraphData tmpdata_with_time;
+            tmpdata_with_time.key = latestTimeStamp_ms * parsSettings.timebase_s;
+            tmpdata_with_time.value = listNumericData.last();
+            int tmplabelindex = graphLabels.indexOf(tmplabel);
+            if(tmplabelindex < 0)
             {
-                listTimeStamp.append(latestTimeStamp_Time.msecsSinceStartOfDay());
+                graphLabels.append(tmplabel);
+                QSharedPointer<QVector<QCPGraphData>> tmpshardptr(new QVector<QCPGraphData>());
+                tmpshardptr->append(tmpdata_with_time);
+                chartGraphsData.append(tmpshardptr);
             }
-            else if (parsSettings.timestampMode == serial::SysTimeStamp)
+            else
             {
-                listTimeStamp.append(latestTimeStamp_Time.msecsSinceStartOfDay()); // old listTimeStamp.append(parserClock.currentTime().msecsSinceStartOfDay());
-            }
-            else if (parsSettings.timestampMode == serial::FixIntervalTStamp)
-            {
-                latestTimeStamp_Time = latestTimeStamp_Time.addMSecs(parsSettings.fixinterval); //ToDo micros
-                listTimeStamp.append(latestTimeStamp_Time.msecsSinceStartOfDay());
-            }
-            else //tstampmode == serial::NoTStamp
-            {
-                listTimeStamp.append(parserTimer.elapsed());
+               chartGraphsData[tmplabelindex]->append(tmpdata_with_time);
             }
         }
     }
@@ -151,7 +180,43 @@ void Parser::parseSlot(QString inputString)
     {
         while(parseddata.semaphorGUIprio->available() <= 0){} //wait if GUI needs to be prioritized
 
-        QMutexLocker<QMutex> locker(parseddata.mutex.data());
+        QMutexLocker<QMutex> locker(parseddata.mutex.data());     //lock Mutex for queue_________________________________________________
+
+        //new style
+        bool addToExistingQueueRecord = true;
+        foreach(const QString graphlabel, graphLabels)
+        {
+            if(parseddata.queueChartGraphLabels->indexOf(graphlabel) < 0)
+            {
+                addToExistingQueueRecord = false;
+                break;
+            }
+        }
+        if(addToExistingQueueRecord)
+        {
+           foreach(const QString graphlabel, graphLabels)
+            {
+                QSharedPointer<QVector<QCPGraphData>> ptr_list_vec(chartGraphsData.at(graphLabels.lastIndexOf(graphlabel)));
+                QSharedPointer<QVector<QCPGraphData>> ptr_queue_vec(parseddata.queueChartGraphs->at(parseddata.queueChartGraphLabels->lastIndexOf(graphlabel)));
+                foreach(QCPGraphData vec, *ptr_list_vec)
+                {
+                    ptr_queue_vec->append(vec);
+                }
+            }
+        }
+        else
+        {
+            foreach(const QString graphlabel, graphLabels)
+            {
+                parseddata.queueChartGraphLabels->enqueue(graphlabel);
+            }
+            foreach(const QSharedPointer<QVector<QCPGraphData>> graphdata, chartGraphsData)
+            {
+                parseddata.queueChartGraphs->enqueue(graphdata);
+            }
+        }
+
+        //old style
         foreach(const QString &label, stringListLabels)
         {
             parseddata.queueLabels->enqueue(label);
@@ -172,7 +237,7 @@ void Parser::parseSlot(QString inputString)
             parseddata.strqueuePrefiltered->append(inputString.trimmed());
 
         //qDebug() << Q_FUNC_INFO << "write to queue" << QThread::currentThread() << parseddata.queueLabels->count();
-    }
+    }  //unlock Mutex for queue____________________________________________________________________________________________________________
 }
 
 void Parser::finish()
