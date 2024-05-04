@@ -423,7 +423,7 @@ void Parser::getCSVReadyData(QStringList *columnNames, QList<QList<double>> *dat
 
 void Parser::setParseSettings(int tstampMode, QString extClockLabel, int fixintv, double tbase_s, int prefltr)
 {
-    if(tstampMode > -1 && tstampMode <= 2)
+    if(tstampMode > -1 && tstampMode <= 3)
     {
         parsSettings.timestampMode = static_cast<serial::SERIAL_TSTAMP_MODE>(tstampMode);
     }
