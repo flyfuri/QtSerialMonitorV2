@@ -9,7 +9,9 @@ Stay tuned...
 
 ## update 24.4.2024
 It looks like it is going to be a major refactoring project as I get more and more ideas the more I dive into the code...
- 
+
+## update 17.5.2024
+My priorities have shifted. The project is on hold at least for half a year...
  
 
 ## What is already useful:
